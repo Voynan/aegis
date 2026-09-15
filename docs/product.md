@@ -107,7 +107,9 @@ reason, recorded in [decisions.md](decisions.md).
 
 - **License:** MIT (see [`LICENSE`](../LICENSE)).
 - **Dependencies:** one — `cryptography`. Extras add `django` and `click` (or `typer`).
-- **Distribution:** PyPI. Pure Python; no native wheels of our own.
+- **Distribution:** PyPI as `aegis-voynan` (imported as `aegis`,
+  [ADR-0018](decisions.md#adr-0018-distribute-as-aegis-voynan-import-as-aegis)). Pure Python;
+  no native wheels of our own.
 - **Status:** pre-1.0, pre-implementation. See [roadmap.md](roadmap.md).
 - **Security reports:** see [security.md § Reporting a vulnerability](security.md#8-reporting-a-vulnerability).
 

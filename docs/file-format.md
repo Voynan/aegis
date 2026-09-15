@@ -24,9 +24,9 @@ and justified.
 │  nonce_prefix   7 B   random, STREAM base                      │
 └────────────────────────────────────────────────────────────────┘
 ┌─ CHUNKS — N ≥ 1 ───────────────────────────────────────────────┐
-│  [ up to 65536 B plaintext, encrypted ] ‖ [ 16 B GCM tag ]      │
+│  [ up to 65536 B plaintext, encrypted ] ‖ [ 16 B GCM tag ]     │
 │  nonce = nonce_prefix(7) ‖ counter_be32(4) ‖ last_flag(1)      │
-│  aad   = sha256(header_core) ‖ sha256(canonical_context)       │
+│  aad   = sha256(L_hdr ‖ core) ‖ sha256(L_ctx ‖ context)        │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -187,8 +187,15 @@ Every chunk is encrypted with the same 64-byte AAD:
 
 ```
 header_core = header[0:7] ‖ header[87:94]        # magic, version, suite, flags, nonce_prefix
-aad         = SHA256(header_core) ‖ SHA256(canonical_context)
+L_hdr       = b"aegis-hdr-v1\x00"                 # 13 bytes
+L_ctx       = b"aegis-ctx-v1\x00"                 # 13 bytes
+aad         = SHA256(L_hdr ‖ header_core) ‖ SHA256(L_ctx ‖ canonical_context)
 ```
+
+The labels are domain separation: they tie each digest to one role and one format version,
+so neither hash can coincide with a SHA-256 computed of the same bytes for any other purpose.
+They follow the `kek_id` label convention (§ 3.1) of a trailing `\x00`. See
+[ADR-0019](decisions.md#adr-0019-domain-separated-aad-hashes).
 
 > **Change from `initial-spec.md` § 6.** The spec says
 > `aad = sha256(header) ‖ sha256(context)` over the *whole* 94-byte header. That is
@@ -250,7 +257,11 @@ for each (key, value) in sorted order:
 | `bool` | `0x04` | 1 byte: `0x00` or `0x01` |
 | `None` | `0x05` | empty, length `0` |
 
-Then `context_hash = SHA256(canonical_bytes)`.
+Then `context_hash = SHA256(b"aegis-ctx-v1\x00" ‖ canonical_bytes)` (§ 4.3).
+
+An empty context `{}` is legal and canonicalizes to the empty byte string. `context=None`
+is not a context and raises `UsageError`
+([ADR-0020](decisions.md#adr-0020-context-is-required-but-may-be-empty)).
 
 **Why length prefixes and type tags.** Length prefixing removes separator ambiguity —
 `{"a|b": "c"}` and `{"a": "b|c"}` must not collide. Type tags separate `1` from `"1"` from
@@ -274,7 +285,7 @@ Additional rules a writer **MUST** enforce, all raising `UsageError`:
 1.  dek, custody = key_source.provision()          # 32 random bytes + the custody block
 2.  nonce_prefix = os.urandom(7)
 3.  header       = assemble(magic, version, suite, flags, custody, nonce_prefix)
-4.  aad          = SHA256(header[0:7] ‖ header[87:94]) ‖ SHA256(canonical(context))
+4.  aad          = SHA256(L_hdr ‖ header[0:7] ‖ header[87:94]) ‖ SHA256(L_ctx ‖ canonical(context))
 5.  write(header)
 6.  counter = 0
     for each 65536-byte segment, knowing whether it is the last:
@@ -301,7 +312,7 @@ output stream may be a pipe or a network socket.
         · kek_id not among configured KEKs       → UnknownKek  (before any decryption)
         · unwrap tag mismatch                    → UnsealFailed
         · caller-held with no key supplied       → UsageError
-4.  aad = SHA256(header[0:7] ‖ header[87:94]) ‖ SHA256(canonical(context))
+4.  aad = SHA256(L_hdr ‖ header[0:7] ‖ header[87:94]) ‖ SHA256(L_ctx ‖ canonical(context))
 5.  counter = 0
     loop:
         block = read_exactly(65552)              # one full chunk, if available
@@ -314,6 +325,10 @@ output stream may be a pipe or a network socket.
         emit(plain); break
     if the stream ended after a chunk marked last=False → TruncatedFile
 ```
+
+> **Open ([architecture.md § 16](architecture.md#16-open-questions)).** The order of the length
+> and magic checks in steps 1–2 (Q20), the reader's behaviour past 2³² chunks (Q22), and the
+> error when the vault's custody mode does not match the file's in step 3 (Q26).
 
 `TruncatedFile` is genuinely distinguishable — the final-chunk marker is ours, so a stream
 that ends without an authenticated final chunk is provably incomplete. Nothing else is
@@ -333,7 +348,9 @@ debug the wrong thing.
 ```
 
 Bytes 0–6, 87–93 and the entire body are untouched. On a seekable file this is an 80-byte
-in-place write; a 10 TB bucket rotates in the time it takes to list it. That "the body is
+in-place write; on a filesystem, a 10 TB bucket rotates in the time it takes to list it.
+Object stores cannot overwrite part of an object, and crash safety under power loss is still
+open ([architecture.md § 16, Q8–Q9](architecture.md#16-open-questions)). That "the body is
 byte-identical after rotation" is a **tested invariant**, not a claim
 (see [tests.md § 6](tests.md#6-layer-5--rotation-and-dogfood)).
 
@@ -383,7 +400,9 @@ a *KEK* compromise, which is the realistic one — see
 | Maximum `context` key/value | 4 GiB − 1 each | `u32be` length prefix |
 | Maximum `int` in `context` | signed 64-bit | fixed 8-byte encoding |
 
-A writer that reaches 2³² chunks **MUST** raise rather than wrap the counter.
+A writer that reaches 2³² chunks **MUST** raise rather than wrap the counter. How this is
+tested, and what a reader does at the same limit, is open
+([Q22](architecture.md#16-open-questions)).
 
 ## 8. Changing this format
 

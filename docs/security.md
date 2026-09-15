@@ -83,6 +83,7 @@ published construction.
 | Segmented encryption | STREAM | Hoang, Reyhanitabar, Rogaway, Vizár (CRYPTO 2015) |
 | Key derivation for the wrap | HKDF-SHA256, `info=b"aegis-dek-wrap-v1"` | RFC 5869 |
 | Key fingerprint | SHA-256, truncated to 128 bits | FIPS 180-4 |
+| AAD hashes | SHA-256 with domain-separation labels `aegis-hdr-v1\x00`, `aegis-ctx-v1\x00` | FIPS 180-4 |
 | Randomness | `os.urandom` | OS CSPRNG |
 | Primitive implementation | `cryptography` (OpenSSL) | — |
 
@@ -104,7 +105,8 @@ Mitigations, all of them mandatory before 1.0:
 3. 100 % branch coverage on `stream.py` and `format.py`, non-negotiable.
 4. `stream.py` kept small enough to audit in one sitting.
 5. **A public review request before 1.0** — the release is not cut until independent eyes
-   have looked at `stream.py` and `file-format.md`.
+   have looked at `stream.py` and `file-format.md`. When to request it relative to the M4
+   freeze is open ([Q19](architecture.md#16-open-questions)).
 
 ## 5. Key management
 
@@ -144,7 +146,8 @@ This is inherent to streaming AEAD — the alternative is buffering the entire p
 which defeats the purpose. Aegis' answer is to make the safe path the convenient one:
 
 - `unseal_to_path()` writes to a temporary file, `fsync`s, and `os.replace`s only after a
-  clean return. On failure, nothing survives.
+  clean return. On failure, nothing survives. Whether the rename itself survives a crash is
+  open ([Q21](architecture.md#16-open-questions)).
 - `unseal_bytes()` is all-or-nothing by construction.
 - Streaming directly to an HTTP client means the client may receive a truncated body under
   a `200` status. If that matters, unseal to a path first.

@@ -9,19 +9,28 @@ demonstrated, not asserted.
 
 ---
 
-## Before anything: settle two questions
+## Before anything: open questions
 
-Both are recorded in [architecture.md § 16](architecture.md#16-open-questions).
+All are recorded, with deadlines, in [architecture.md § 16](architecture.md#16-open-questions).
 
-- **Q1 — the chunk AAD / rotation contradiction.** Resolved in
-  [ADR-0014](decisions.md#adr-0014-chunk-aad-covers-the-immutable-header-core-only); needs
-  a yes. Blocks M2.
-- **Q2 — how a KEK is encoded in an environment variable.** Proposed in
-  [ADR-0015](decisions.md#adr-0015-keks-in-environment-variables-are-base64). Blocks M3.
+- **Q1 — the chunk AAD / rotation contradiction.** Resolved:
+  [ADR-0014](decisions.md#adr-0014-chunk-aad-covers-the-immutable-header-core-only) accepted.
+- **Q2 — how a KEK is encoded in an environment variable.** Resolved: strict base64,
+  [ADR-0015](decisions.md#adr-0015-keks-in-environment-variables-are-base64) accepted.
+- **Q8 — rotation on Windows** and **Q9 — torn writes during rotation.** Open. Both block M5.
+  Q9 must be decided before M4 if the format-level option (a redundant custody block) is
+  considered.
+- **Q10–Q26 — gaps found while turning this roadmap into a task list.** Open. Each milestone
+  below lists the ones it depends on.
 
-Also worth deciding early, because they are free now and expensive after M4: **Q5** (domain
-separation in the AAD hashes) and **Q6** (the name, which appears in the HKDF `info`
-strings).
+Also settled before M4, because they were free then and expensive after:
+
+- **Q3** — `context` is required, `{}` is legal
+  ([ADR-0020](decisions.md#adr-0020-context-is-required-but-may-be-empty)).
+- **Q5** — domain-separated AAD hashes
+  ([ADR-0019](decisions.md#adr-0019-domain-separated-aad-hashes)).
+- **Q6** — distribution `aegis-voynan`, import `aegis`
+  ([ADR-0018](decisions.md#adr-0018-distribute-as-aegis-voynan-import-as-aegis)).
 
 ---
 
@@ -29,24 +38,35 @@ strings).
 
 Packaging, tooling and CI, with no library code.
 
-- `pyproject.toml`: `aegis` package, `cryptography` floor, extras `[django]`, `[cli]`,
-  `[dev]`. Hatchling or PDM backend; no `setup.py`.
+**Open questions:** [Q17 and Q18](architecture.md#16-open-questions) — both change tasks below.
+
+- `pyproject.toml`: distribution `aegis-voynan`, import package `aegis`, `cryptography`
+  floor, extras `[django]` and `[cli]`, a `dev` dependency group. Hatchling backend; no
+  `setup.py` ([stack.md § 5](stack.md#5-packaging)).
+- `uv.lock` committed; CI on `uv sync --locked`
+  ([ADR-0024](decisions.md#adr-0024-uv-for-development-and-ci)).
+- Reserve `aegis-voynan` on PyPI. A pending trusted publisher alone does **not** reserve the
+  name; only a published release does ([Q18](architecture.md#16-open-questions)).
 - `.gitignore` **replaced** — the committed one is a Ruby template and ignores none of
   `__pycache__/`, `.venv/`, `*.egg-info/`, `.pytest_cache/`, `.hypothesis/`, `.coverage`.
-- `ruff` (lint + format), `mypy --strict`, `pytest`, `pytest-cov`, `hypothesis` pinned in
-  `[dev]`.
+  Whether `.hypothesis/` is ignored is [Q17](architecture.md#16-open-questions). Keep the
+  existing `docs/dev/` entry.
+- `ruff` (lint + format), `mypy --strict`, `pytest`, `pytest-cov`, `hypothesis` in the `dev`
+  group, versions locked in `uv.lock`.
 - CI matrix per [tests.md § 9](tests.md#9-ci): Python 3.10–3.13 × Linux/macOS/Windows.
 - `py.typed`, `LICENSE` (present), `README.md` skeleton whose first section after the title
   is the threat-model paragraph.
 - `SECURITY.md` at the repository root pointing at [security.md](security.md), so GitHub's
   private advisory flow is enabled from day one.
 
-**DoD:** a green CI run on an empty package on every matrix cell; `pip install -e ".[dev]"`
-works on all three platforms.
+**DoD:** a green CI run on an empty package on every matrix cell, including the
+`lowest-direct` floor job; `uv sync --all-extras` works on all three platforms.
 
 ## M1 — The pure core: `errors`, `format`, `context`
 
 No cryptography, no I/O. These are the modules a fuzzer can chew on for free.
+
+**Open questions:** [Q20](architecture.md#16-open-questions).
 
 - `errors.py`: the full hierarchy, with structured attributes and no message-only errors.
 - `format.py`: `Header` dataclass ↔ 94 bytes, with strict validation
@@ -62,6 +82,8 @@ input.
 
 The risky module. Written last among the primitives, first among the crypto.
 
+**Open questions:** [Q19 and Q22](architecture.md#16-open-questions).
+
 - STREAM segmentation, nonce construction, final-chunk marker, AAD composition.
 - Pure with respect to randomness: DEK, `nonce_prefix` and AAD arrive as parameters
   ([architecture.md § 4](architecture.md#4-the-purity-boundary-randomness-lives-at-the-edges)).
@@ -72,6 +94,8 @@ the boundary sizes; the adversarial suite passes; a second person has read it li
 against [file-format.md](file-format.md).
 
 ## M3 — `keys.py` and `vault.py`
+
+**Open questions:** [Q10, Q12, Q21, Q23 and Q26](architecture.md#16-open-questions).
 
 - `KeySource` protocol, `CustodyBlock`, `EnvKey` (with `primary` / `previous`),
   `CallerHeld`.
@@ -88,6 +112,9 @@ and `unseal`.
 
 The point of no return ([ADR-0013](decisions.md#adr-0013-freeze-the-format-at-milestone-m4)).
 
+**Open questions:** [Q9 (if its format option is considered), Q19, Q20 and
+Q25](architecture.md#16-open-questions) — all closed before the vectors are generated.
+
 - Generate `tests/vectors/v1.json` with `tests/vectors/generate.py`, run by hand.
 - **Hand-check the output against [file-format.md](file-format.md), offset by offset, with
   a second pair of eyes.** This is the last moment a byte can move.
@@ -98,17 +125,27 @@ cell; there is no code path anywhere in the repository that rewrites it.
 
 ## M5 — `rotate.py`
 
+**Blocked by** [Q8 and Q9](architecture.md#16-open-questions): the write primitive on Windows,
+and what happens when power is lost mid-write. Also open: [Q11 and
+Q15](architecture.md#16-open-questions), the public rotation call and recursive rotation over
+mixed directories.
+
 - Unwrap with the matching KEK, re-wrap under the primary, write 80 bytes at offset 7.
-- A single `pwrite`, so an interruption leaves a file that still opens with the old KEK.
+- One write of the 80 bytes (`os.pwrite` where available, `seek` + `write` elsewhere), then
+  `fsync`. Crash safety beyond process death depends on Q9.
 - No-op when the file is already under the primary KEK.
 
-**DoD:** the body-byte-identity test passes; interruption leaves a readable file; an unknown
-`kek_id` raises `UnknownKek` and leaves the file untouched.
+**DoD:** the body-byte-identity test passes on all three platforms; a killed process leaves a
+readable file; the torn-write guarantee chosen in Q9 is tested (for example by simulating a
+half-written custody block); an unknown `kek_id` raises `UnknownKek` and leaves the file
+untouched.
 
 ## M6 — CLI
 
 `keygen`, `seal`, `unseal`, `inspect`, `rotate`, with the exit-code contract from
 [architecture.md § 12](architecture.md#12-the-cli).
+
+**Open questions:** [Q10, Q13, Q14, Q15 and Q24](architecture.md#16-open-questions).
 
 **DoD:** subprocess integration tests covering every exit code; `inspect` never decrypts
 (asserted by giving it a file whose KEK is not configured); stdin/stdout piping works; the
@@ -118,6 +155,8 @@ dogfood test proves the CLI imports only the public API.
 
 `SealedFileField`, the storage wrapper, and system checks that reject `CallerHeld` and
 catch the common context mistakes.
+
+**Open questions:** [Q4 and Q16](architecture.md#16-open-questions).
 
 **DoD:** integration tests on Django LTS and latest; upload streams without buffering the
 file in memory; `manage.py check` fails on a caller-held configuration; the dogfood test
@@ -131,20 +170,25 @@ passes for `aegis.contrib.django`.
 - **Public review request on `stream.py` and [file-format.md](file-format.md)**, in a
   venue where cryptographers read (`cryptography` mailing lists, `r/crypto`, the
   `age`/Tink communities). This is a **release blocker**, per
-  [security.md § 4.1](security.md#41-the-accepted-risk).
+  [security.md § 4.1](security.md#41-the-accepted-risk). Requesting it only here, after the M4
+  freeze, is [Q19](architecture.md#16-open-questions).
 - Mutation testing run over `stream.py`, `format.py`, `context.py`; every surviving mutant
   either killed or explained.
+- The benchmark suite meets every objective in [performance.md](performance.md) on both
+  reference runners.
 
 **DoD:** review feedback is triaged and either fixed or answered in writing; no open
 finding that touches the format.
 
 ## M9 — 1.0
 
+**Open questions:** [Q7](architecture.md#16-open-questions).
+
 - PyPI trusted publishing (OIDC), signed tags, provenance attestations.
 - A CHANGELOG that starts here.
 - The README says plainly that the library has **not** been independently audited.
 
-**DoD:** `pip install aegis` works on a clean machine on all supported Pythons; the frozen
+**DoD:** `pip install aegis-voynan` works on a clean machine on all supported Pythons; the frozen
 vectors pass against the published wheel.
 
 ---

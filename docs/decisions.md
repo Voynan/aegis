@@ -25,10 +25,17 @@ spec into these documents.
 | [0011](#adr-0011-kek_id-is-derived-never-configured) | `kek_id` is derived, never configured | accepted |
 | [0012](#adr-0012-no-legacy-format-reader) | No legacy format reader | accepted |
 | [0013](#adr-0013-freeze-the-format-at-milestone-m4) | Freeze the format at milestone M4 | accepted |
-| [0014](#adr-0014-chunk-aad-covers-the-immutable-header-core-only) | Chunk AAD covers the immutable header core only | **proposed** |
-| [0015](#adr-0015-keks-in-environment-variables-are-base64) | KEKs in environment variables are base64 | **proposed** |
-| [0016](#adr-0016-a-zero-length-plaintext-still-produces-one-chunk) | A zero-length plaintext still produces one chunk | **proposed** |
-| [0017](#adr-0017-strict-header-validation-reserved-bits-and-custody-zeros) | Strict header validation | **proposed** |
+| [0014](#adr-0014-chunk-aad-covers-the-immutable-header-core-only) | Chunk AAD covers the immutable header core only | accepted |
+| [0015](#adr-0015-keks-in-environment-variables-are-base64) | KEKs in environment variables are base64 | accepted |
+| [0016](#adr-0016-a-zero-length-plaintext-still-produces-one-chunk) | A zero-length plaintext still produces one chunk | accepted |
+| [0017](#adr-0017-strict-header-validation-reserved-bits-and-custody-zeros) | Strict header validation | accepted |
+| [0018](#adr-0018-distribute-as-aegis-voynan-import-as-aegis) | Distribute as `aegis-voynan`, import as `aegis` | accepted |
+| [0019](#adr-0019-domain-separated-aad-hashes) | Domain-separated AAD hashes | accepted |
+| [0020](#adr-0020-context-is-required-but-may-be-empty) | `context` is required but may be empty | accepted |
+| [0021](#adr-0021-the-cli-is-built-on-click) | The CLI is built on `click` | **proposed** |
+| [0022](#adr-0022-hatchling-as-the-build-backend) | Hatchling as the build backend | **proposed** |
+| [0023](#adr-0023-python-floor-follows-cpythons-support-window) | Python floor follows CPython's support window | **proposed** |
+| [0024](#adr-0024-uv-for-development-and-ci) | `uv` for development and CI | accepted |
 
 ---
 
@@ -217,8 +224,8 @@ flag ([tests.md § 3](tests.md#3-layer-1--frozen-vectors-kat)).
 
 ## ADR-0014: Chunk AAD covers the immutable header core only
 
-**Status:** **proposed** — resolves a contradiction in `initial-spec.md`; needs confirmation
-before M2
+**Status:** accepted (2026-09-14) — resolves a contradiction in `initial-spec.md`; the AAD
+hashing below is amended by [ADR-0019](#adr-0019-domain-separated-aad-hashes) (labels added)
 
 **Context.** `initial-spec.md` § 6 specifies `aad = sha256(header) ‖ sha256(canonical_context)`
 over the whole 94-byte header, *and* § 6.1 specifies rotation as rewriting `kek_id`, `salt` and
@@ -257,7 +264,7 @@ and `after[87:] == before[87:]`.
 
 ## ADR-0015: KEKs in environment variables are base64
 
-**Status:** **proposed** — fills a gap in `initial-spec.md`; needs confirmation before M3
+**Status:** accepted (2026-09-14) — fills a gap in `initial-spec.md`
 
 **Context.** `initial-spec.md` § 8 requires `EnvKey` to validate that each KEK is "exactly 32
 bytes", but an environment variable holds text. The encoding was never specified, and it is
@@ -278,7 +285,7 @@ binary-safe across platforms and shells. Not worth the class of bug.
 
 ## ADR-0016: A zero-length plaintext still produces one chunk
 
-**Status:** **proposed** — fills a gap in `initial-spec.md`
+**Status:** accepted (2026-09-14) — fills a gap in `initial-spec.md`
 
 **Decision.** `number_of_chunks = max(1, ceil(len(plaintext) / 65536))`. An empty file is a
 94-byte header followed by one chunk holding 0 bytes of ciphertext and a 16-byte tag.
@@ -289,7 +296,7 @@ truncation resistance has a hole at the one place it is easiest to exploit.
 
 ## ADR-0017: Strict header validation (reserved bits and custody zeros)
 
-**Status:** **proposed** — fills a gap in `initial-spec.md`
+**Status:** accepted (2026-09-14) — fills a gap in `initial-spec.md`
 
 **Decision.** Readers reject, with `MalformedHeader`: any non-zero reserved bit in `flags`;
 a non-zero custody block when `flags` bit 0 indicates caller-held custody.
@@ -300,6 +307,196 @@ custody block removes a 640-bit covert channel and makes the format canonical, w
 lets a frozen vector pin the exact bytes of a whole container.
 
 **Consequences.** Two negative vectors, and a mutation case in the adversarial suite.
+
+## ADR-0018: Distribute as `aegis-voynan`, import as `aegis`
+
+**Status:** accepted (2026-09-14) — resolves [Q6](architecture.md#16-open-questions);
+erratum: a pending publisher does **not** reserve the name, see
+[Q18](architecture.md#16-open-questions)
+
+**Context.** The PyPI name `aegis` is taken by an unrelated project (an aiohttp
+authentication library, last released in 2020). The project's branding is already built
+around "Aegis".
+
+**Decision.** Only the PyPI *distribution* name changes: `pip install aegis-voynan`.
+Everything else stays `aegis` — the import package (`import aegis`), the CLI command, the
+`AegisError` hierarchy, the `aegis.contrib.django` module, and every string inside the file
+format (magic `AEG\x00`, the HKDF `info` and `kek_id` labels).
+
+**Why.** The file format and the public API are what users depend on; the distribution name
+only appears in `pip install` and in dependency lists. A split distribution/import name has
+wide precedent (`pillow` → `PIL`, `beautifulsoup4` → `bs4`, `pyyaml` → `yaml`).
+
+**Alternatives considered.**
+- *Rename the whole project* (`strongroom`, `lacre`, …). Free in the format until M4, but
+  discards the existing branding.
+- *Also rename the import package* to avoid the collision below. Rejected: `import aegis` is
+  the branding developers see in code.
+
+**Consequences.**
+- **Import collision.** The unrelated `aegis` distribution also installs a top-level
+  `aegis/` package. Installing both in one environment makes them overwrite each other.
+  Accepted as unlikely (different domain, unmaintained); documented in
+  [usage.md § 1](usage.md#1-install).
+- Install commands and extras read `aegis-voynan[django]`, `aegis-voynan[cli]`.
+- The name must be registered on PyPI early (a placeholder release, or trusted publishing
+  configured as a pending publisher) so it cannot be squatted before 1.0.
+
+## ADR-0019: Domain-separated AAD hashes
+
+**Status:** accepted (2026-09-14) — resolves [Q5](architecture.md#16-open-questions); amends
+the AAD formula of [ADR-0014](#adr-0014-chunk-aad-covers-the-immutable-header-core-only)
+
+**Context.** The chunk AAD was `SHA256(header_core) ‖ SHA256(canonical_context)`: two bare
+hashes. Every other hash and KDF in the format already carries a label (`kek_id` uses
+`b"aegis-kek-id\x00"`, the wrap HKDF uses `info=b"aegis-dek-wrap-v1"`). A bare
+`SHA256(canonical_context)` is also byte-identical to a hash a consumer might compute of the
+same bytes for an unrelated purpose (a cache key, a log field).
+
+**Decision.**
+
+```
+aad = SHA256(b"aegis-hdr-v1\x00" ‖ header_core) ‖ SHA256(b"aegis-ctx-v1\x00" ‖ canonical_context)
+```
+
+Labels are ASCII, carry the format version, and end in `\x00` — the same convention as the
+`kek_id` label — so no label is a prefix of another label followed by data. ADR-0014's
+choice of *which* header bytes enter the AAD is unchanged; only the hashing is amended.
+
+**Why.** Defence in depth, not a fix: no attack on the unlabelled form is known (the header
+core starts with `AEG\x00`, which as a context length prefix would need a ~1 GiB key, and the
+two hashes occupy fixed positions). The cost is ~13 bytes hashed once per file. Labels tie
+every digest to one role and one format version, so a future v2 input can never be read as
+a v1 input, and the construction is uniform for the M8 public review.
+
+**Alternatives considered.**
+- *Leave the hashes bare.* Free, but the one unlabelled derivation in the format, and
+  impossible to change after M4 without a new format version.
+- *Labels without the `\x00` terminator.* Works with fixed-length labels, but breaks the
+  convention already set by `kek_id` for no gain.
+
+**Consequences.** Must land before the vectors freeze at M4. `context.py` exposes the
+labelled hash; the KAT vectors pin both labels.
+
+## ADR-0020: `context` is required but may be empty
+
+**Status:** accepted (2026-09-14) — resolves [Q3](architecture.md#16-open-questions)
+
+**Context.** `initial-spec.md` § 5.2 says `context` is mandatory, but its § 5.1 example calls
+`vault.seal(src, dst)` with none.
+
+**Decision.** `context` is a required keyword argument of `seal`, `unseal`, `seal_bytes`,
+`unseal_bytes` and `unseal_to_path`. `context={}` is legal and canonicalizes to the empty
+byte string (so its hash is `SHA256(b"aegis-ctx-v1\x00")`). `context=None` raises
+`UsageError`.
+
+**Why.** Some payloads genuinely have no record to bind to. Making the caller type `{}`
+keeps that choice deliberate and visible in code review, instead of an omission.
+
+**Alternatives considered.**
+- *Forbid empty contexts.* Pushes callers to invent a meaningless constant, which binds to
+  nothing and hides the decision.
+- *Make `context` optional, defaulting to `{}`.* Turns the library's central safety feature
+  into something a developer can forget.
+
+**Consequences.** A frozen vector with an empty context; a unit test that `None` and a
+missing argument both fail.
+
+## ADR-0021: The CLI is built on `click`
+
+**Status:** **proposed** — `initial-spec.md` left "`click` (or `typer`)" open
+
+**Decision.** The `[cli]` extra depends on `click>=8.1`, and nothing else.
+
+**Why.** `click` has no runtime dependencies. `typer` adds `rich`, `shellingham` and
+`annotated-doc`. The CLI has five commands, an exit-code contract and binary standard
+streams; explicit `click` code expresses all three directly. Fewer packages in the install
+of a security tool is a supply-chain property.
+
+**Alternatives considered.** *`typer`* — nicer declarations, three more dependencies.
+*`argparse`* — zero dependencies, but binary-stream handling, help formatting and testing
+through `CliRunner` would be rebuilt by hand.
+
+**Consequences.** `import aegis` must never import `click`
+([performance.md](performance.md) P12). Details: [stack.md § 4.1](stack.md#41-cli--click).
+
+## ADR-0022: Hatchling as the build backend
+
+**Status:** **proposed** — the roadmap left "Hatchling or PDM backend" open
+
+**Decision.** `pyproject.toml` (PEP 621) with Hatchling, and no `setup.py`. The wheel target
+names the `aegis` package explicitly, because the distribution name `aegis-voynan` does not
+match the directory.
+
+**Why.** Maintained by the PyPA, one line of configuration for this layout, and it does not
+imply a workflow tool: `uv build` and `python -m build` produce the same wheel
+([ADR-0024](#adr-0024-uv-for-development-and-ci)).
+
+**Alternatives considered.** *PDM backend* — equally capable, but it pulls the project toward
+PDM conventions. *setuptools* — works, with more configuration surface and legacy options to
+avoid.
+
+**Consequences.** [stack.md § 5](stack.md#5-packaging) holds the reference `pyproject.toml`.
+
+## ADR-0023: Python floor follows CPython's support window
+
+**Status:** **proposed** — would amend [product.md § 6](product.md#6-compatibility-promise)
+
+**Context.** The documents promise "3.10+ at 1.0, SPEC 0 style". CPython 3.10 reaches end of
+life on 2026-10-31, before any Aegis release. Strict SPEC 0 would put the floor at 3.13 by
+1.0, excluding Debian 12 (3.11) and many Django 5.2 LTS deployments. 3.14 is missing from
+the CI matrix.
+
+**Decision.** Each release supports every CPython version that still receives security fixes
+on its release date: **3.11–3.14** for a 1.0 before 2027-10-31. Dropping a version stays a
+minor release, announced one release ahead.
+
+**Why.** A security library should not advertise an interpreter that no longer gets security
+fixes. CPython's own window is predictable and published, and it is wider than SPEC 0 for
+the backend deployments Aegis targets.
+
+**Alternatives considered.** *Keep 3.10* — end-of-life on release day. *Strict SPEC 0* —
+drops still-supported interpreters that the target users run.
+
+**Consequences.** On acceptance: `requires-python = ">=3.11"`; product.md § 6,
+architecture.md § 14 and tests.md § 9 move to 3.11–3.14.
+
+## ADR-0024: `uv` for development and CI
+
+**Status:** accepted (2026-09-14)
+
+**Context.** The documents described `venv` + `pip` for contributors, development tools
+pinned with `==` inside a `[dev]` extra, and a CI job for the oldest supported
+`cryptography` without saying how to install it.
+
+**Decision.**
+- `uv` manages contributor environments and CI: `uv sync --all-extras`, `uv run …`.
+- `uv.lock` is committed. CI runs `uv sync --locked`.
+- Development tools move from the `[dev]` extra to a PEP 735 `dev` dependency group, with
+  floors in `pyproject.toml` and exact versions in the lockfile.
+- The dependency-floor job is `uv sync --resolution lowest-direct`.
+- CI installs interpreters with `uv python install`.
+- Unchanged: Hatchling stays the build backend (`uv build` invokes it), and publishing stays
+  `pypa/gh-action-pypi-publish` with trusted publishing and attestations.
+
+**Why.**
+- A lockfile gives contributors and CI the same tool versions, which a set of `==` pins in an
+  extra did not cover transitively.
+- An extra is published metadata. `pip install "aegis-voynan[dev]"` would have installed our
+  linters into a user's environment; a dependency group never leaves the repository.
+- `--resolution lowest-direct` turns "we test the floor" from a promise into one flag.
+- Users are unaffected: the published wheel has no trace of `uv`.
+
+**Alternatives considered.**
+- *`venv` + `pip`, `==` pins* — no lockfile, no transitive reproducibility, no built-in
+  lowest-resolution run.
+- *Poetry / PDM* — equivalent locking, non-standard or tool-specific metadata history, and
+  no Python installation management.
+- *`uv_build` as backend* — couples the build to the workflow tool for no gain on a
+  pure-Python package.
+
+**Consequences.** `contributing.md` § 1, `roadmap.md` M0 and `tests.md` § 9 describe the `uv`
+commands. pip 25.1+ remains a working, unlocked alternative (`--group dev`).
 
 ---
 

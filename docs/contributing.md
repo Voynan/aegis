@@ -11,17 +11,22 @@ Everything here applies to maintainers too.
 ## 1. Setup
 
 ```bash
-git clone https://github.com/<org>/aegis && cd aegis
-python -m venv .venv && source .venv/bin/activate     # 3.10+
-pip install -e ".[dev,cli,django]"
-pre-commit install
+git clone https://github.com/voynan/aegis && cd aegis
+uv sync --all-extras                 # creates .venv: every extra + the dev group, from uv.lock
+uv run pre-commit install
 
-pytest                       # the full suite
-pytest -m "not slow"         # skip the 512 MB memory invariants
-ruff check . && ruff format --check .
-mypy --strict aegis
-pytest --cov=aegis --cov-branch --cov-report=term-missing
+uv run pytest                        # the full suite
+uv run pytest -m "not slow"          # skip the 512 MB memory invariants
+uv run ruff check . && uv run ruff format --check .
+uv run mypy --strict aegis
+uv run pytest --cov=aegis --cov-branch --cov-report=term-missing
 ```
+
+Without `uv`: `python -m venv .venv`, then `pip install -e ".[cli,django]" --group dev`
+(pip 25.1+). That gives you the latest compatible tools rather than the locked ones, so when
+results differ, CI is the reference. Details: [stack.md § 6](stack.md#6-development-tooling).
+
+If you add or upgrade a dependency, commit the updated `uv.lock` in the same PR.
 
 CI runs exactly these. If they pass locally on Linux and fail in CI, it is almost always
 Windows: `os.replace`, `fsync` on a directory, or a file opened in text mode.
@@ -90,6 +95,8 @@ If your PR changes behaviour, it changes documentation in the same PR:
 | The public API | [usage.md](usage.md), the README, docstrings |
 | Module boundaries | [architecture.md](architecture.md) |
 | A security property, or an assumption | [security.md](security.md) |
+| A dependency, a tool or a version floor | [stack.md](stack.md) |
+| The hot path, buffering, or anything a benchmark measures | [performance.md](performance.md) |
 | A load-bearing choice | a new ADR in [decisions.md](decisions.md) |
 
 ## 7. Reviewing
@@ -120,7 +127,7 @@ approvals, one of which must be a maintainer. Everything else needs one.
 2. Frozen vectors pass **against the built wheel**, not only the source tree.
 3. CHANGELOG updated; version bumped per SemVer.
 4. Signed tag; CI publishes via PyPI trusted publishing (OIDC). No human holds a token.
-5. Verify `pip install aegis==<version>` on a clean machine and re-run the vectors.
+5. Verify `pip install aegis-voynan==<version>` on a clean machine and re-run the vectors.
 
 Pre-1.0, M8's public review of `stream.py` is a release blocker
 ([roadmap.md](roadmap.md)).

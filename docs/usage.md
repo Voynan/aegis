@@ -8,10 +8,14 @@ intended 1.0 API; no code exists yet.
 ## 1. Install
 
 ```bash
-pip install aegis              # core — one dependency: cryptography
-pip install "aegis[django]"    # + the Django field
-pip install "aegis[cli]"       # + the aegis command
+pip install aegis-voynan              # core — one dependency: cryptography
+pip install "aegis-voynan[django]"    # + the Django field
+pip install "aegis-voynan[cli]"       # + the aegis command
 ```
+
+The PyPI name is `aegis-voynan`; everything else is `aegis` — `import aegis`, the `aegis`
+command. Do not install it next to the unrelated `aegis` distribution (an aiohttp auth
+library): both ship a top-level `aegis` package and would overwrite each other.
 
 ## 2. Sixty seconds
 
@@ -132,6 +136,10 @@ rather than guessed by ours.
 Ordering does not matter: `{"a": 1, "b": 2}` and `{"b": 2, "a": 1}` produce the same bytes
 ([file-format.md § 5](file-format.md#5-canonical-serialization-of-context)).
 
+If a payload genuinely has no record to bind to, pass `context={}` explicitly. Omitting the
+argument or passing `None` raises `UsageError`: the absence of binding should be a visible
+choice in your code, not an accident.
+
 ## 5. Key custody: the only knob
 
 The `key` argument is the only thing that changes between the two modes.
@@ -192,6 +200,10 @@ sealed with — same keys, same types, `42` not `"42"`? (2) is the file complete
 size match `94 + n + 16 × max(1, ceil(n/65536))`? (3) has the file been through anything
 text-oriented — a `TextIOWrapper`, a JSON round-trip, git without `-b`?
 
+> **Pending ([Q20, Q26](architecture.md#16-open-questions)).** The error raised for a non-Aegis
+> file shorter than 94 bytes (today `MalformedHeader`), and for a vault whose custody mode does
+> not match the file's, are not final.
+
 ## 7. The streaming trust boundary — read this one
 
 `unseal` emits plaintext chunk by chunk. Every chunk it emits is authentic, but **the file
@@ -230,7 +242,12 @@ aegis rotate ./bucket --recursive
 ```
 
 Rotation unwraps the data key with the old KEK and re-wraps it with the new one, rewriting
-80 bytes per file. A 10 TB bucket rotates in the time it takes to enumerate it. During step
+80 bytes per file. On a local or network filesystem, a 10 TB bucket rotates in the time it
+takes to enumerate it.
+
+> **Pending ([Q8, Q9](architecture.md#16-open-questions)).** Object stores such as S3 cannot
+> overwrite part of an object, so rotation there rewrites whole objects. Crash safety of
+> in-place rotation under power loss is not yet specified. Back up before rotating. During step
 2 files in both states are readable, so there is no downtime and no ordering requirement.
 
 Rotation does not re-encrypt file contents, so it does not help against an attacker who
@@ -268,6 +285,10 @@ command line.
 Exit codes: `0` ok, `1` unseal failed, `2` usage, `3` format, `4` unknown KEK, `5`
 configuration.
 
+> **Pending ([Q13, Q14, Q15, Q24](architecture.md#16-open-questions)).** How the CLI receives
+> keys, which context types it can express beyond `str` and `int`, how `rotate --recursive`
+> treats mixed directories, and how `inspect` reports sizes are not yet specified.
+
 ## 10. Django
 
 ```python
@@ -288,6 +309,9 @@ class Document(models.Model):
 - The context callable must be **stable for the life of the row**. The example above binds
   to `owner_id`; if your product can transfer ownership, bind to something immutable
   instead.
+
+> **Pending ([Q16](architecture.md#16-open-questions)).** How the field receives its `Vault` is
+> not yet specified.
 
 ## 11. Pitfalls checklist
 

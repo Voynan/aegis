@@ -78,11 +78,15 @@ A versioned JSON file pinning, for fixed inputs, the exact expected output byte 
 - exactly 2 × 65536 bytes (a full final chunk, no empty trailing chunk)
 - a context exercising every type tag, including `bool` versus `int` and a key whose UTF-8
   sort order differs from its code-point order
-- an empty context (pending [Q3](architecture.md#16-open-questions))
+- an empty context `{}` ([ADR-0020](decisions.md#adr-0020-context-is-required-but-may-be-empty))
 
 Plus **negative vectors** — byte sequences that must be rejected, with the exact expected
 exception: bad magic, `version=2`, `suite=2`, a reserved flag bit set, a non-zero custody
 block in caller-held mode, a 93-byte file, a body of 15 bytes.
+
+> **Open.** An all-zero custody block under KEK custody is missing from this list
+> ([Q25](architecture.md#16-open-questions)), and the expected class for a short non-Aegis file
+> depends on [Q20](architecture.md#16-open-questions).
 
 **How they are generated.** Once, by a standalone script in `tests/vectors/generate.py`,
 run by hand, with the output hand-checked against
@@ -161,7 +165,8 @@ specific one (`TruncatedFile`, `UnknownKek`, `MalformedHeader`).
 
 Hypothesis settings: a `.hypothesis` example database committed for the failing cases we
 have found, `derandomize=False` in CI with a nightly high-`max_examples` run so that CI
-stays fast but coverage keeps growing.
+stays fast but coverage keeps growing. Committing the database contradicts roadmap.md M0,
+which ignores `.hypothesis/`; that is open as [Q17](architecture.md#16-open-questions).
 
 ## 5. Layer 4 — Constant memory as a tested invariant
 
@@ -171,7 +176,7 @@ def test_seal_uses_constant_memory():
     tracemalloc.start()
     vault.seal(src, NullSink(), context={"k": "v"})
     _, peak = tracemalloc.get_traced_memory()
-    assert peak < CEILING          # a few MiB, not a few hundred
+    assert peak < CEILING          # 1 MiB — performance.md P3
 ```
 
 The source is a generator-backed stream so the test needs no disk and no fixture file. The
@@ -202,8 +207,10 @@ contradiction in `initial-spec.md` § 6 on day one
 
 Also: rotating twice is idempotent in effect; rotating to the KEK already in use is a no-op
 that does not rewrite the file; rotating with an unknown `kek_id` raises `UnknownKek` and
-leaves the file untouched; an interrupted rotation leaves a file that still opens with the
-old KEK (write the 80 bytes as a single `pwrite`).
+leaves the file untouched; a rotation whose process is killed leaves a file that still opens
+with the old KEK. Behaviour under a **torn** write (power loss) is not yet specified; see
+[Q8 and Q9](architecture.md#16-open-questions). Whatever Q9 decides gets a test that
+simulates a half-written custody block.
 
 **The dogfood test — the public API is complete.**
 
@@ -266,14 +273,15 @@ before 1.0 and then periodically — not on every PR. A surviving mutant is a mi
 |---|---|
 | Python | 3.10, 3.11, 3.12, 3.13 |
 | OS | Linux, macOS, Windows (Windows matters: `os.replace`, `fsync`, line endings) |
-| `cryptography` | oldest supported + newest |
+| `cryptography` | oldest supported (`uv sync --resolution lowest-direct`) + newest (`uv.lock`) |
 | Django | LTS + latest, in the adapter job only |
 
 Every PR runs: `ruff`, `mypy --strict`, the full suite, the coverage gates. The nightly job
 adds a high-`max_examples` Hypothesis run and mutation testing.
 
 Benchmarks run on a schedule, publish a trend, and **never gate a PR** — a noisy runner
-must not block a correct change.
+must not block a correct change. They do gate a release; objectives and gates are in
+[performance.md](performance.md).
 
 ## 10. What a pull request must include
 
