@@ -1,3 +1,5 @@
+docs/dev/
+
 *.gem
 *.rbc
 /.config
