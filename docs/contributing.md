@@ -18,7 +18,7 @@ uv run pre-commit install
 uv run pytest                        # the full suite
 uv run pytest -m "not slow"          # skip the 512 MB memory invariants
 uv run ruff check . && uv run ruff format --check .
-uv run mypy --strict aegis
+uv run mypy                          # strict, on src/aegis (stack.md § 6.3)
 uv run pytest --cov=aegis --cov-branch --cov-report=term-missing
 ```
 
@@ -79,7 +79,7 @@ Full strategy: [tests.md](tests.md).
 - `ruff` decides formatting and lint. There is no style debate. The rule set, and which rule
   enforces which item of § 3, is in [stack.md § 6.3](stack.md#63-tool-configuration).
 - A `# noqa` or `# type: ignore` names its code and gives a reason. A bare one fails lint.
-- `mypy --strict` on `aegis/`. Public API fully annotated; `Protocol` for extension points.
+- `mypy --strict` on `src/aegis/`. Public API fully annotated; `Protocol` for extension points.
 - Names come from the domain: `seal`/`unseal`, `dek`, `kek`, `wrapped_dek`, `nonce_prefix`,
   `context`. Do not introduce a synonym for a term that already exists in
   [file-format.md](file-format.md).

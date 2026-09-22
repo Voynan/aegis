@@ -50,7 +50,7 @@ enforced by a test, not by good intentions
 ### 2.1 Package layout
 
 ```
-aegis/
+src/aegis/
 ├── __init__.py        # the public API: Vault, EnvKey, CallerHeld, Receipt, errors
 ├── errors.py
 ├── format.py
@@ -71,8 +71,10 @@ aegis/
         └── checks.py  # Django system checks
 ```
 
-The rest of the repository — tests, benchmarks, tools, workflows — is laid out in
-[structure.md](structure.md).
+The package sits under `src/`, so it is importable only once installed
+([ADR-0025](decisions.md#adr-0025-the-package-lives-in-src)); these documents name its files
+relative to the package, as `aegis/__init__.py` or `stream.py`. The rest of the repository —
+tests, benchmarks, tools, workflows — is laid out in [structure.md](structure.md).
 
 `aegis.contrib.django` rather than `aegis.django`, so that `import aegis.django` can never
 shadow or be confused with the `django` package, and so that "contrib" reads as what it

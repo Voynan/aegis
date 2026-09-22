@@ -216,7 +216,7 @@ simulates a half-written custody block.
 
 ```python
 def test_adapters_import_only_public_api():
-    for module in walk("aegis/contrib", "aegis/cli"):
+    for module in walk("src/aegis/contrib", "src/aegis/cli"):
         for imported in ast_imports(module):
             assert imported in PUBLIC_API or not imported.startswith("aegis.")
 ```

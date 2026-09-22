@@ -36,6 +36,7 @@ spec into these documents.
 | [0022](#adr-0022-hatchling-as-the-build-backend) | Hatchling as the build backend | **proposed** |
 | [0023](#adr-0023-python-floor-follows-cpythons-support-window) | Python floor follows CPython's support window | **proposed** |
 | [0024](#adr-0024-uv-for-development-and-ci) | `uv` for development and CI | accepted |
+| [0025](#adr-0025-the-package-lives-in-src) | The package lives in `src/` | accepted |
 
 ---
 
@@ -497,6 +498,51 @@ pinned with `==` inside a `[dev]` extra, and a CI job for the oldest supported
 
 **Consequences.** `contributing.md` § 1, `roadmap.md` M0 and `tests.md` § 9 describe the `uv`
 commands. pip 25.1+ remains a working, unlocked alternative (`--group dev`).
+
+## ADR-0025: The package lives in `src/`
+
+**Status:** accepted (2026-09-22)
+
+**Context.** The documents placed the package at the repository root, as `aegis/`.
+[contributing.md § 9](contributing.md#9-releasing) requires the frozen vectors to pass
+against the built wheel, not only the source tree, and performance P12 and P13 measure what
+`import aegis` loads and costs.
+
+**Decision.**
+- The package lives in `src/aegis/`.
+- Configuration that takes a path names `src/aegis`: Hatchling's `packages`, `mypy`'s `files`,
+  `ruff`'s per-file ignores, `CODEOWNERS`.
+- pytest runs with `--import-mode=importlib`.
+- Prose keeps naming library files relative to the package (`aegis/__init__.py`, `stream.py`).
+
+**Why.**
+- With the package at the root, anything that puts the working directory on `sys.path`
+  (`python -m pytest`, a REPL, a script) imports the source tree instead of the installed
+  package. A wheel missing a file (`py.typed`, a sub-package) then still passes its tests.
+  Under `src/`, the package is importable only once installed: editable in development, the
+  built wheel in the release job.
+- P12 and P13 then measure the import a user performs, not one that happens to find a
+  checkout.
+- It is the layout `uv init --lib` generates and the one pytest's documentation recommends.
+
+**Alternatives considered.**
+- *Flat layout (`aegis/` at the root)*: one directory fewer, and `python -m aegis.cli` runs
+  from a checkout without installing. But the guarantee above would depend on how each
+  contributor happens to invoke pytest.
+- *Modules directly in `src/`, without `aegis/`*: `src/` is the directory on `sys.path`, not a
+  package, so the directory inside it is the import name. The modules would install as
+  top-level `errors`, `format`, `stream`, `keys`, and `import aegis` would not exist.
+  Renaming `src/` to `aegis/` at build time (Hatchling's `sources`) fixes only the wheel:
+  `mypy`, pytest, coverage and editors would still see a top-level `stream` module instead of
+  `aegis.stream`.
+
+**Consequences.**
+- Nothing changes day to day: `uv sync` installs the project in editable mode.
+- `importlib` mode lets two layers share a test basename (`tests/unit/test_format.py`,
+  `tests/property/test_format.py`). Test modules cannot import one another, so shared helpers
+  live in `conftest.py`.
+- Paths change in [structure.md](structure.md), architecture.md § 2.1 and
+  [stack.md §§ 5, 6](stack.md#5-packaging).
 
 ---
 

@@ -172,7 +172,7 @@ dev = [
 aegis = "aegis.cli.__main__:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["aegis"]
+packages = ["src/aegis"]             # installed as `aegis` (ADR-0025)
 
 [tool.uv]
 required-version = ">=0.12"
@@ -188,7 +188,7 @@ in the same file: § 6.3.
 | Task | Command |
 |---|---|
 | Create the environment with every extra and the `dev` group | `uv sync --all-extras` |
-| Run anything in it | `uv run pytest`, `uv run mypy --strict aegis` |
+| Run anything in it | `uv run pytest`, `uv run mypy` |
 | Test another Python | `uv sync --all-extras --python 3.13` |
 | Test the dependency floors | `uv sync --all-extras --resolution lowest-direct` |
 | Update one tool | `uv lock --upgrade-package ruff` |
@@ -214,7 +214,7 @@ compatible tools instead of the locked ones, so CI remains the reference.
 |---|---|---|
 | `uv` | 0.12.13 | environments, lockfile, Python installs, `uv build` |
 | `ruff` | 0.16.7 | lint and format — no style debate ([contributing.md § 5](contributing.md#5-code-style)) |
-| `mypy` | 2.3.1 | `--strict` on `aegis/` |
+| `mypy` | 2.3.1 | `--strict` on `src/aegis/` |
 | `pytest` | 9.1.1 | the suite |
 | `pytest-cov` | 7.1.0 | per-file coverage gates ([tests.md § 8](tests.md#8-coverage)) |
 | `hypothesis` | 6.168.0 | round-trip and adversarial properties |
@@ -278,11 +278,11 @@ max-complexity = 10
 "click".msg      = "`import aegis` must never import click (ADR-0021). Only aegis.cli may."
 
 [tool.ruff.lint.per-file-ignores]
-"aegis/keys.py"   = ["TID251"]          # the edges: randomness and the environment
-"aegis/vault.py"  = ["TID251"]
-"aegis/rotate.py" = ["TID251"]
-"aegis/cli/**"    = ["TID251"]
-"tests/**"        = ["S101", "D", "TID251"]
+"src/aegis/keys.py"   = ["TID251"]      # the edges: randomness and the environment
+"src/aegis/vault.py"  = ["TID251"]
+"src/aegis/rotate.py" = ["TID251"]
+"src/aegis/cli/**"    = ["TID251"]
+"tests/**"            = ["S101", "D", "TID251"]
 ```
 
 - **Why these rule groups.** Each one either enforces a rule in
@@ -303,7 +303,7 @@ max-complexity = 10
 
 ```toml
 [tool.mypy]
-files = ["aegis"]
+files = ["src/aegis"]
 strict = true
 warn_unreachable = true
 enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool", "possibly-undefined"]
@@ -317,7 +317,7 @@ of check that silently passes on a missing KEK.
 ```toml
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = ["--strict-markers", "--strict-config", "-ra"]
+addopts = ["--import-mode=importlib", "--strict-markers", "--strict-config", "-ra"]
 xfail_strict = true
 filterwarnings = ["error"]              # a deprecation in `cryptography` fails the suite, not a user
 markers = ["slow: the 512 MB memory invariants (tests.md)"]
@@ -328,7 +328,7 @@ markers = ["slow: the 512 MB memory invariants (tests.md)"]
 ```toml
 [tool.coverage.run]
 branch = true
-source = ["aegis"]
+source_pkgs = ["aegis"]                 # the package, wherever it is installed from
 
 [tool.coverage.report]
 show_missing = true

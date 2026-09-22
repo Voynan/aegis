@@ -8,8 +8,11 @@ This is the only complete tree of the repository. Other documents describe what 
 
 ## 1. Principles
 
-1. **The wheel is `aegis/` and nothing else.** Tests, benchmarks, tools and documentation
-   never reach a user's `site-packages` ([stack.md § 5](stack.md#5-packaging)).
+1. **The library lives in `src/aegis/`, and the wheel is that directory and nothing else.**
+   Under `src/`, the package is importable only once installed, so every test runs against
+   the installed package ([ADR-0025](decisions.md#adr-0025-the-package-lives-in-src)). Tests,
+   benchmarks, tools and documentation never reach a user's `site-packages`
+   ([stack.md § 5](stack.md#5-packaging)).
 2. **The package is flat.** Seven single-responsibility modules at one level
    ([architecture.md § 2](architecture.md#2-module-map)). The only sub-packages are the two
    adapters, each behind an extra.
@@ -29,25 +32,26 @@ else exists before it is needed.
 
 ```
 .
-├── aegis/                         # the library; the only directory in the wheel (M0)
-│   ├── __init__.py                # the public API; lazy __version__
-│   ├── py.typed
-│   ├── errors.py                  # M1
-│   ├── format.py                  # M1
-│   ├── context.py                 # M1
-│   ├── stream.py                  # M2
-│   ├── keys.py                    # M3
-│   ├── vault.py                   # M3
-│   ├── rotate.py                  # M5
-│   ├── cli/                       # extra [cli] (M6)
-│   │   ├── __init__.py
-│   │   └── __main__.py            # the `aegis` entry point and `python -m aegis.cli`
-│   └── contrib/
-│       └── django/                # extra [django] (M7)
-│           ├── __init__.py
-│           ├── fields.py          # SealedFileField
-│           ├── storage.py
-│           └── checks.py          # Django system checks
+├── src/
+│   └── aegis/                     # the library; the only directory in the wheel (M0)
+│       ├── __init__.py            # the public API; lazy __version__
+│       ├── py.typed
+│       ├── errors.py              # M1
+│       ├── format.py              # M1
+│       ├── context.py             # M1
+│       ├── stream.py              # M2
+│       ├── keys.py                # M3
+│       ├── vault.py               # M3
+│       ├── rotate.py              # M5
+│       ├── cli/                   # extra [cli] (M6)
+│       │   ├── __init__.py
+│       │   └── __main__.py        # the `aegis` entry point and `python -m aegis.cli`
+│       └── contrib/
+│           └── django/            # extra [django] (M7)
+│               ├── __init__.py
+│               ├── fields.py      # SealedFileField
+│               ├── storage.py
+│               └── checks.py      # Django system checks
 ├── tests/
 │   ├── conftest.py                # shared fixtures; Hypothesis profiles `ci` and `nightly`
 │   ├── vectors/
@@ -86,9 +90,9 @@ else exists before it is needed.
 
 | Path | Owning document | In the wheel |
 |---|---|---|
-| `aegis/` | [architecture.md § 2](architecture.md#2-module-map) | yes |
-| `aegis/cli/` | [architecture.md § 12](architecture.md#12-the-cli) | yes, needs `[cli]` to import |
-| `aegis/contrib/django/` | [architecture.md § 13](architecture.md#13-the-django-adapter) | yes, needs `[django]` to import |
+| `src/aegis/` | [architecture.md § 2](architecture.md#2-module-map) | yes |
+| `src/aegis/cli/` | [architecture.md § 12](architecture.md#12-the-cli) | yes, needs `[cli]` to import |
+| `src/aegis/contrib/django/` | [architecture.md § 13](architecture.md#13-the-django-adapter) | yes, needs `[django]` to import |
 | `tests/` | [tests.md](tests.md) | no |
 | `tests/vectors/` | [file-format.md § 8](file-format.md#8-changing-this-format), [tests.md § 3](tests.md#3-layer-1--frozen-vectors-kat) | no; in the sdist |
 | `benchmarks/` | [performance.md § 5](performance.md#5-how-it-is-measured) | no |
@@ -97,15 +101,16 @@ else exists before it is needed.
 | `SECURITY.md` | [security.md § 8](security.md#8-reporting-a-vulnerability) | no |
 | `CHANGELOG.md` | [contributing.md § 9](contributing.md#9-releasing) | no |
 
-The wheel is built from `packages = ["aegis"]`. The sdist is the tracked tree, which is how
-`tests/vectors/` reaches downstream packagers ([stack.md § 5](stack.md#5-packaging)).
+The wheel is built from `packages = ["src/aegis"]` and installs as `aegis`. The sdist is the
+tracked tree, which is how `tests/vectors/` reaches downstream packagers
+([stack.md § 5](stack.md#5-packaging)).
 
 ## 4. Where a new file goes
 
 | You are adding | It goes in | Also update |
 |---|---|---|
-| A library module | `aegis/`, at the top level | architecture.md § 2 — the module map and its layer |
-| Code only an extra needs | `aegis/cli/` or `aegis/contrib/<framework>/` | stack.md § 4 |
+| A library module | `src/aegis/`, at the top level | architecture.md § 2 — the module map and its layer |
+| Code only an extra needs | `src/aegis/cli/` or `src/aegis/contrib/<framework>/` | stack.md § 4 |
 | A test | `tests/<layer>/test_<subject>.py` | tests.md, if it is a new kind of test |
 | A frozen vector | nowhere after M4: a new vector is a new format version | file-format.md § 8 |
 | A benchmark | `benchmarks/bench_<subject>.py` | performance.md § 5, with its objective |
@@ -116,10 +121,13 @@ The wheel is built from `packages = ["aegis"]`. The sdist is the tracked tree, w
 | A decision | a new ADR in `docs/decisions.md`, never a new file | the ADR table |
 | Working notes | `docs/dev/` | — |
 
-- **`aegis/` imports nothing from outside `aegis/`.** `tests/`, `benchmarks/` and `tools/`
+- **`src/aegis/` imports nothing from outside itself.** `tests/`, `benchmarks/` and `tools/`
   import the library, never the reverse.
-- **A new top-level directory, or a new sub-package in `aegis/`,** changes this document and
+- **A new top-level directory, or a new sub-package in `src/aegis/`,** changes this document and
   needs a reason in the PR description; one that changes the layering needs an ADR.
+- **Naming files in prose.** Documents name library files relative to the package —
+  `aegis/stream.py`, or just `stream.py`. Anything a tool reads as a path (`pyproject.toml`,
+  `CODEOWNERS`, a test that walks the tree) uses the full `src/aegis/…`.
 
 ## 5. Never committed
 
