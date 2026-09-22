@@ -30,8 +30,9 @@ alternatives. Versions named here are the floor or the pin **as of 2026-09-14**.
 | Distribution | PyPI `aegis-voynan`, pure-Python wheel + sdist | [ADR-0018](decisions.md#adr-0018-distribute-as-aegis-voynan-import-as-aegis) |
 | CLI extra | `click` | `>=8.1` ([ADR-0021](decisions.md#adr-0021-the-cli-is-built-on-click), proposed) |
 | Django extra | Django | `>=5.2` (current LTS) |
-| Lint + format | `ruff` | locked in `uv.lock` |
+| Lint + format | `ruff`, rules in § 6.3 | locked in `uv.lock` |
 | Types | `mypy --strict` | locked |
+| Supply-chain checks | `pip-audit` (dependencies), `zizmor` (workflows) | locked |
 | Tests | `pytest`, `pytest-cov`, `hypothesis`, `pytest-django` | locked |
 | Mutation testing | `mutmut` | locked |
 | Benchmarks | `pytest-benchmark` | locked |
@@ -164,6 +165,7 @@ dev = [
   "pytest>=9.1.1", "pytest-cov>=7.1.0", "hypothesis>=6.168.0",
   "pytest-django>=4.14.0", "pytest-benchmark>=5.3.0",
   "mutmut>=3.8.0", "pre-commit>=4.6.2",
+  "pip-audit>=2.9", "zizmor>=1.0",
 ]
 
 [project.scripts]
@@ -175,6 +177,9 @@ packages = ["aegis"]
 [tool.uv]
 required-version = ">=0.12"
 ```
+
+Tool configuration (`[tool.ruff]`, `[tool.mypy]`, `[tool.pytest]`, `[tool.coverage]`) lives
+in the same file: § 6.3.
 
 ## 6. Development tooling
 
@@ -217,9 +222,124 @@ compatible tools instead of the locked ones, so CI remains the reference.
 | `pytest-benchmark` | 5.3.0 | the benchmark suite ([performance.md](performance.md)) |
 | `mutmut` | 3.8.0 | mutation testing of `stream.py`, `format.py`, `context.py` |
 | `pre-commit` | 4.6.2 | local hooks: `ruff check`, `ruff format`, `uv lock --check` |
+| `pip-audit` | locked at M0 | known vulnerabilities in the locked dependency tree |
+| `zizmor` | locked at M0 | security lint of `.github/workflows/` (injection, unpinned actions, token scope) |
 
 - **Updates:** Dependabot opens PRs for `uv.lock` and for GitHub Actions.
 - `mypy` runs in CI, not in `pre-commit`, to keep commits fast.
+- **The `pre-commit` hooks are `repo: local`** and run `uv run ruff …`, so the hook uses the
+  `ruff` in `uv.lock`. A `ruff-pre-commit` mirror would carry its own `rev:` and drift from
+  what CI runs (§ 1, principle 5).
+
+### 6.3 Tool configuration
+
+Everything lives in `pyproject.toml`; there are no `ruff.toml`, `mypy.ini`, `pytest.ini` or
+`.coveragerc` files.
+
+#### `ruff`
+
+`target-version` is not set: `ruff` reads it from `requires-python`, so `UP` rewrites code to
+the floor's syntax and moves with it when ADR-0023 is decided. The line length is the default
+(88), because the default is the choice nobody argues about.
+
+```toml
+[tool.ruff.format]
+docstring-code-format = true           # examples in docstrings are formatted too
+
+[tool.ruff.lint]
+select = [
+  "E", "W", "F",   # pycodestyle, pyflakes
+  "I",             # import order
+  "UP",            # modern syntax for the requires-python floor
+  "B",             # bugbear: likely bugs
+  "BLE",           # blind except                      — contributing.md § 3, rule 3
+  "S",             # bandit: `random`, `pickle`, `assert`, hardcoded secrets
+  "T20",           # no `print` in the library
+  "TID",           # banned APIs, below                — contributing.md § 3, rules 6-7
+  "D",             # docstrings on the public API      — contributing.md § 5
+  "C90",           # complexity ceiling                — "stream.py stays small"
+  "N", "C4", "SIM", "PIE", "RET", "PERF", "PT", "PGH", "RUF",
+]
+ignore = [
+  "W191", "D206", "D300",               # conflict with `ruff format`
+  "D105", "D107",                       # dunder methods and __init__: the class docstring covers them
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"                   # `Raises:` names the exception the caller should expect
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"os.urandom".msg = "Randomness enters only in keys.py, vault.py and rotate.py (architecture.md § 4)."
+"os.environ".msg = "The environment is read only in keys.py (architecture.md § 4)."
+"os.getenv".msg  = "The environment is read only in keys.py (architecture.md § 4)."
+"click".msg      = "`import aegis` must never import click (ADR-0021). Only aegis.cli may."
+
+[tool.ruff.lint.per-file-ignores]
+"aegis/keys.py"   = ["TID251"]          # the edges: randomness and the environment
+"aegis/vault.py"  = ["TID251"]
+"aegis/rotate.py" = ["TID251"]
+"aegis/cli/**"    = ["TID251"]
+"tests/**"        = ["S101", "D", "TID251"]
+```
+
+- **Why these rule groups.** Each one either enforces a rule in
+  [contributing.md](contributing.md) mechanically (`BLE`, `TID`, `D`, `C90`), catches a class
+  of bug a crypto library cannot afford (`B`, `S`, `PGH`: no blanket `# type: ignore` or
+  `# noqa`), or keeps the code modern and short (`UP`, `C4`, `SIM`, `RET`, `PERF`).
+- **Deliberately not selected.** `ANN` (duplicates `mypy --strict`), `PTH` (would rewrite
+  `os.replace` and `os.fsync`, which `unseal_to_path` needs as they are), `ERA` (flags the
+  nonce-construction comments in `stream.py` as commented-out code), `PL` and `FBT` (noise
+  without a matching project rule), `preview` rules (they change between `ruff` releases).
+- **The banned-API list is a fast first line, not the proof.** The `sys.modules` test for
+  `click` and the purity tests in [tests.md](tests.md) stay; `ruff` makes the same mistake
+  fail in the editor instead of in CI.
+- **Suppressions** carry the rule code and a reason: `# noqa: S311 — test-only shuffle`.
+  `RUF100` fails on a `noqa` that no longer suppresses anything.
+
+#### `mypy`
+
+```toml
+[tool.mypy]
+files = ["aegis"]
+strict = true
+warn_unreachable = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool", "possibly-undefined"]
+```
+
+`truthy-bool` matters here: `if key:` on an object that is always truthy is exactly the kind
+of check that silently passes on a missing KEK.
+
+#### `pytest`
+
+```toml
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-markers", "--strict-config", "-ra"]
+xfail_strict = true
+filterwarnings = ["error"]              # a deprecation in `cryptography` fails the suite, not a user
+markers = ["slow: the 512 MB memory invariants (tests.md)"]
+```
+
+#### `coverage`
+
+```toml
+[tool.coverage.run]
+branch = true
+source = ["aegis"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = ["if TYPE_CHECKING:", "^\\s*\\.\\.\\.$"]   # Protocol bodies
+```
+
+`coverage`'s `fail_under` is one number for the whole report, and `--include` with several
+files averages them. The per-file gates of [tests.md § 8](tests.md#8-coverage) are therefore
+applied by `tools/coverage_gates.py`: a stdlib-only script that reads `coverage json` and
+checks each file against its threshold. CI runs it after the suite.
 
 ## 7. CI/CD
 
@@ -228,10 +348,10 @@ locked `uv` version, then `uv sync --locked`, which fails if `uv.lock` is stale.
 
 | Workflow | Trigger | Runs |
 |---|---|---|
-| `ci.yml` | every PR and push to `main` | `ruff`, `mypy --strict`, the full suite on the matrix, the floor job (`--resolution lowest-direct`), per-file coverage gates, a guard that fails if `tests/vectors/` changed |
-| `nightly.yml` | daily | high-`max_examples` Hypothesis, `mutmut` |
+| `ci.yml` | every PR and push to `main` | `ruff check --output-format=github`, `ruff format --check`, `mypy`, `zizmor`, the full suite on the matrix, the floor job (`--resolution lowest-direct`), per-file coverage gates, a guard that fails if `tests/vectors/` changed |
+| `nightly.yml` | daily | high-`max_examples` Hypothesis, `mutmut`, `pip-audit` on the locked tree (a vulnerability appears without a code change) |
 | `bench.yml` | weekly, release tags, manual | the benchmark suite on the reference runners ([performance.md § 5](performance.md#5-how-it-is-measured)) |
-| `release.yml` | signed tag | `uv build` → provenance attestations → publish through trusted publishing |
+| `release.yml` | signed tag | `pip-audit` → `uv build` → provenance attestations → publish through trusted publishing |
 
 - Matrix: [tests.md § 9](tests.md#9-ci).
 - Third-party actions are pinned by **commit SHA**, not by tag.
@@ -252,6 +372,8 @@ locked `uv` version, then `uv sync --locked`, which fails if `uv.lock` is stale.
 | `anyio` / asyncio wrappers | [ADR-0007](decisions.md#adr-0007-no-async-api-in-10). |
 | `pydantic`, `attrs` | `dataclasses` covers four frozen records. |
 | `rich`, `colorama` | Plain CLI output; nothing to colour. |
+| `black`, `isort`, `flake8`, `bandit`, `pyupgrade` | `ruff` implements all five (`ruff format`, `I`, `E`/`F`, `S`, `UP`) in one locked tool. |
+| `pyright` | One type checker. Two would disagree on edge cases and double the suppressions. |
 
 ## 9. Open items
 

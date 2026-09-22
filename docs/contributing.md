@@ -76,7 +76,9 @@ Full strategy: [tests.md](tests.md).
 
 ## 5. Code style
 
-- `ruff` decides formatting and lint. There is no style debate.
+- `ruff` decides formatting and lint. There is no style debate. The rule set, and which rule
+  enforces which item of § 3, is in [stack.md § 6.3](stack.md#63-tool-configuration).
+- A `# noqa` or `# type: ignore` names its code and gives a reason. A bare one fails lint.
 - `mypy --strict` on `aegis/`. Public API fully annotated; `Protocol` for extension points.
 - Names come from the domain: `seal`/`unseal`, `dek`, `kek`, `wrapped_dek`, `nonce_prefix`,
   `context`. Do not introduce a synonym for a term that already exists in

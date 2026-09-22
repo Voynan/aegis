@@ -51,8 +51,10 @@ Packaging, tooling and CI, with no library code.
   `__pycache__/`, `.venv/`, `*.egg-info/`, `.pytest_cache/`, `.hypothesis/`, `.coverage`.
   Whether `.hypothesis/` is ignored is [Q17](architecture.md#16-open-questions). Keep the
   existing `docs/dev/` entry.
-- `ruff` (lint + format), `mypy --strict`, `pytest`, `pytest-cov`, `hypothesis` in the `dev`
-  group, versions locked in `uv.lock`.
+- `ruff` (lint + format), `mypy --strict`, `pytest`, `pytest-cov`, `hypothesis`, `pip-audit`,
+  `zizmor` in the `dev` group, versions locked in `uv.lock`; their configuration in
+  `pyproject.toml` as in [stack.md § 6.3](stack.md#63-tool-configuration), and
+  `tools/coverage_gates.py`.
 - CI matrix per [tests.md § 9](tests.md#9-ci): Python 3.10–3.13 × Linux/macOS/Windows.
 - `py.typed`, `LICENSE` (present), `README.md` skeleton whose first section after the title
   is the threat-model paragraph.

@@ -261,8 +261,10 @@ def test_repr_and_errors_never_contain_key_material():
 | everything else | 90 % lines |
 
 Enforced per-file, not as a project average — an average lets the risky module hide behind
-the CLI's coverage. Coverage is a floor, not evidence: 100 % on `stream.py` means every
-branch ran, not that every attack was tried. That is what layer 3 is for.
+the CLI's coverage. `coverage` alone cannot do that, so `tools/coverage_gates.py` applies
+this table ([stack.md § 6.3](stack.md#63-tool-configuration)). Coverage is a floor, not
+evidence: 100 % on `stream.py` means every branch ran, not that every attack was tried. That
+is what layer 3 is for.
 
 **Mutation testing** (`mutmut`) is run against `stream.py`, `format.py` and `context.py`
 before 1.0 and then periodically — not on every PR. A surviving mutant is a missing test.
@@ -276,8 +278,8 @@ before 1.0 and then periodically — not on every PR. A surviving mutant is a mi
 | `cryptography` | oldest supported (`uv sync --resolution lowest-direct`) + newest (`uv.lock`) |
 | Django | LTS + latest, in the adapter job only |
 
-Every PR runs: `ruff`, `mypy --strict`, the full suite, the coverage gates. The nightly job
-adds a high-`max_examples` Hypothesis run and mutation testing.
+Every PR runs: `ruff`, `mypy --strict`, `zizmor`, the full suite, the coverage gates. The
+nightly job adds a high-`max_examples` Hypothesis run and mutation testing.
 
 Benchmarks run on a schedule, publish a trend, and **never gate a PR** — a noisy runner
 must not block a correct change. They do gate a release; objectives and gates are in
