@@ -9,15 +9,16 @@ Everything here is normative unless a section says otherwise.
 |---|---|---|
 | 1 | [product.md](product.md) | What Aegis is, who it is for, what it promises and refuses |
 | 2 | [architecture.md](architecture.md) | How the code is organised and why it is organised that way |
-| 3 | [stack.md](stack.md) | Dependencies, tools and version policy, and why each was chosen |
-| 4 | [file-format.md](file-format.md) | The byte-level format — the one artifact that cannot change |
-| 5 | [security.md](security.md) | Threat model, guarantees, non-guarantees, disclosure |
-| 6 | [usage.md](usage.md) | How a developer actually uses the library |
-| 7 | [tests.md](tests.md) | The testing strategy — which is the argument for trusting the code |
-| 8 | [performance.md](performance.md) | Performance objectives, how they are measured, what blocks a release |
-| 9 | [decisions.md](decisions.md) | The decision log (ADRs), including rejected alternatives |
-| 10 | [roadmap.md](roadmap.md) | Implementation milestones and what blocks 1.0 |
-| 11 | [contributing.md](contributing.md) | How to work on this repository |
+| 3 | [structure.md](structure.md) | Where every file and directory lives, and where a new one goes |
+| 4 | [stack.md](stack.md) | Dependencies, tools and version policy, and why each was chosen |
+| 5 | [file-format.md](file-format.md) | The byte-level format — the one artifact that cannot change |
+| 6 | [security.md](security.md) | Threat model, guarantees, non-guarantees, disclosure |
+| 7 | [usage.md](usage.md) | How a developer actually uses the library |
+| 8 | [tests.md](tests.md) | The testing strategy — which is the argument for trusting the code |
+| 9 | [performance.md](performance.md) | Performance objectives, how they are measured, what blocks a release |
+| 10 | [decisions.md](decisions.md) | The decision log (ADRs), including rejected alternatives |
+| 11 | [roadmap.md](roadmap.md) | Implementation milestones and what blocks 1.0 |
+| 12 | [contributing.md](contributing.md) | How to work on this repository |
 
 [initial-spec.md](initial-spec.md) is the original approved design spec (2026-09-07). It is
 kept as a historical record and is **not** updated. Where these documents differ from it, they

@@ -96,6 +96,7 @@ If your PR changes behaviour, it changes documentation in the same PR:
 | Anything on disk | [file-format.md](file-format.md) — and it needs a version byte |
 | The public API | [usage.md](usage.md), the README, docstrings |
 | Module boundaries | [architecture.md](architecture.md) |
+| A directory, or where a kind of file lives | [structure.md](structure.md) |
 | A security property, or an assumption | [security.md](security.md) |
 | A dependency, a tool or a version floor | [stack.md](stack.md) |
 | The hot path, buffering, or anything a benchmark measures | [performance.md](performance.md) |

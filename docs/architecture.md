@@ -69,15 +69,10 @@ aegis/
         ├── fields.py  # SealedFileField
         ├── storage.py
         └── checks.py  # Django system checks
-tests/
-├── vectors/v1.json    # frozen, never regenerated
-├── unit/
-├── property/
-├── adversarial/
-└── integration/
-docs/
-benchmarks/            # separate suite, not a PR gate
 ```
+
+The rest of the repository — tests, benchmarks, tools, workflows — is laid out in
+[structure.md](structure.md).
 
 `aegis.contrib.django` rather than `aegis.django`, so that `import aegis.django` can never
 shadow or be confused with the `django` package, and so that "contrib" reads as what it

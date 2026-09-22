@@ -47,10 +47,12 @@ Packaging, tooling and CI, with no library code.
   ([ADR-0024](decisions.md#adr-0024-uv-for-development-and-ci)).
 - Reserve `aegis-voynan` on PyPI. A pending trusted publisher alone does **not** reserve the
   name; only a published release does ([Q18](architecture.md#16-open-questions)).
-- `.gitignore` **replaced** — the committed one is a Ruby template and ignores none of
-  `__pycache__/`, `.venv/`, `*.egg-info/`, `.pytest_cache/`, `.hypothesis/`, `.coverage`.
+- `.gitignore` **replaced** with the list in
+  [structure.md § 5](structure.md#5-never-committed) — the committed one is a Ruby template
+  and ignores none of `__pycache__/`, `.venv/`, `*.egg-info/`, `.pytest_cache/`, `.coverage`.
   Whether `.hypothesis/` is ignored is [Q17](architecture.md#16-open-questions). Keep the
   existing `docs/dev/` entry.
+- The directories of [structure.md § 2](structure.md#2-the-tree) marked M0.
 - `ruff` (lint + format), `mypy --strict`, `pytest`, `pytest-cov`, `hypothesis`, `pip-audit`,
   `zizmor` in the `dev` group, versions locked in `uv.lock`; their configuration in
   `pyproject.toml` as in [stack.md § 6.3](stack.md#63-tool-configuration), and
