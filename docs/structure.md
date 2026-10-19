@@ -70,14 +70,18 @@ else exists before it is needed.
 │   └── dev/                       # plans and working notes; not normative
 │       ├── v1-todo.md             # the working checklist for 1.0
 │       ├── v2-django.md           # the plan for the Django adapter, after 1.0
+│       ├── specs/                 # one approved spec per milestone (from M0)
+│       ├── plans/                 # one or more approved plans per milestone (from M0)
 │       ├── notes.md               # personal notes; git-ignored
-│       └── diary/                 # personal diary; git-ignored
+│       └── diary/                 # personal diary, one file per day; git-ignored
 ├── .github/
 │   ├── workflows/                 # ci.yml, nightly.yml, bench.yml, release.yml (M0)
 │   ├── dependabot.yml             # uv and github-actions (M0)
 │   └── CODEOWNERS                 # the crypto paths of contributing.md § 7 (M0)
 ├── .claude/
-│   └── skills/                    # agent skills for this repository
+│   ├── settings.json              # requires the superpowers plugin
+│   ├── rules/                     # always-loaded rules: test-first, spec and plan per milestone
+│   └── skills/                    # project skills: git-commit, diary
 ├── pyproject.toml                 # metadata, extras, dev group, tool configuration (M0)
 ├── uv.lock                        # committed; development and CI only (M0)
 ├── .pre-commit-config.yaml        # M0
@@ -101,6 +105,7 @@ else exists before it is needed.
 | `tools/`, `.github/`, `pyproject.toml`, `uv.lock`, `.pre-commit-config.yaml` | [stack.md](stack.md) | no |
 | `docs/` | [docs/README.md](README.md) | no |
 | `docs/dev/` — the plans | [docs/README.md](README.md#plans) | no |
+| `.claude/` | [contributing.md § 2](contributing.md#2-before-you-open-a-pull-request), the rules themselves | no |
 | `SECURITY.md` | [security.md § 8](security.md#8-reporting-a-vulnerability) | no |
 | `CHANGELOG.md` | [contributing.md § 9](contributing.md#9-releasing) | no |
 
@@ -123,7 +128,10 @@ tracked tree, which is how `tests/vectors/` reaches downstream packagers
 | A design document | `docs/<topic>.md` | the reading order in docs/README.md |
 | A decision | a new ADR in `docs/decisions.md`, never a new file | the ADR table |
 | A plan or a checklist | `docs/dev/<name>.md` — committed, not normative | the plans table in docs/README.md |
-| Personal notes | `docs/dev/notes.md` or `docs/dev/diary/` — git-ignored | — |
+| A milestone spec | `docs/dev/specs/YYYY-MM-DD-mN-<topic>-design.md` | the milestone in docs/dev/v1-todo.md |
+| A milestone plan | `docs/dev/plans/YYYY-MM-DD-mN-<k>-<topic>.md` | the milestone in docs/dev/v1-todo.md |
+| A rule for every session | `.claude/rules/<topic>.md` | contributing.md, if people follow it too |
+| Personal notes | `docs/dev/notes.md`, or `docs/dev/diary/DD-MM-YYYY.md` through the `diary` skill — git-ignored | — |
 
 - **`src/aegis/` imports nothing from outside itself.** `tests/`, `benchmarks/` and `tools/`
   import the library, never the reverse.

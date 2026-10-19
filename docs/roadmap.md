@@ -7,6 +7,11 @@ exhaustively tested, and so that the format is frozen before anything depends on
 Each milestone has a definition of done. A milestone is not finished until its DoD is
 demonstrated, not asserted.
 
+Each milestone also starts with an approved spec and one or more approved plans, written with
+the superpowers skills ([.claude/rules/milestone-specs-and-plans.md](../.claude/rules/milestone-specs-and-plans.md)),
+and its code is written test-first ([.claude/rules/tdd-and-testing.md](../.claude/rules/tdd-and-testing.md)).
+The working checklist is [dev/v1-todo.md](dev/v1-todo.md).
+
 ---
 
 ## Before anything: open questions

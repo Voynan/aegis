@@ -37,6 +37,10 @@ mode.
 - **Discuss format-touching changes first.** Anything that changes a byte on disk is a new
   format version, not a patch. Open an issue and expect it to become an
   [ADR](decisions.md).
+- **Start a milestone with a spec and a plan.** Each milestone gets an approved spec in
+  `docs/dev/specs/` and one or more approved plans in `docs/dev/plans/` before any code is
+  written ([.claude/rules/milestone-specs-and-plans.md](../.claude/rules/milestone-specs-and-plans.md)).
+  The rules in `.claude/rules/` bind people and agents alike.
 - **One concern per PR.** A refactor and a behaviour change in the same diff cannot be
   reviewed for security.
 - **No new dependency in the core.** The core has exactly one: `cryptography`. A PR adding
@@ -66,8 +70,9 @@ mode.
 
 ## 4. Tests a PR must carry
 
-- A test that fails before your change and passes after it. Paste both outputs in the PR
-  description.
+- A test that fails before your change and passes after it, written first: code here is built
+  test-first ([.claude/rules/tdd-and-testing.md](../.claude/rules/tdd-and-testing.md)). Paste
+  both outputs in the PR description.
 - For anything touching `stream.py`, `envelope.py`, `format.py` or `context.py`: a
   **property** or a **negative vector**, not only an example. Examples cover the case you
   thought of; properties cover the ones you did not.
