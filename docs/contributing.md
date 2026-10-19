@@ -105,6 +105,7 @@ If your PR changes behaviour, it changes documentation in the same PR:
 | A dependency, a tool or a version floor | [stack.md](stack.md) |
 | The hot path, buffering, or anything a benchmark measures | [performance.md](performance.md) |
 | A load-bearing choice | a new ADR in [decisions.md](decisions.md) |
+| A flow, a module boundary or the key hierarchy | also [diagrams.md](diagrams.md), so the pictures never contradict the text |
 
 ## 7. Reviewing
 

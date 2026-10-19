@@ -8,17 +8,18 @@ Everything here is normative unless a section says otherwise.
 | # | Document | Answers |
 |---|---|---|
 | 1 | [product.md](product.md) | What Aegis is, who it is for, what it promises and refuses |
-| 2 | [architecture.md](architecture.md) | How the code is organised and why it is organised that way |
-| 3 | [structure.md](structure.md) | Where every file and directory lives, and where a new one goes |
-| 4 | [stack.md](stack.md) | Dependencies, tools and version policy, and why each was chosen |
-| 5 | [file-format.md](file-format.md) | The byte-level format — the one artifact that cannot change |
-| 6 | [security.md](security.md) | Threat model, guarantees, non-guarantees, disclosure |
-| 7 | [usage.md](usage.md) | How a developer actually uses the library |
-| 8 | [tests.md](tests.md) | The testing strategy — which is the argument for trusting the code |
-| 9 | [performance.md](performance.md) | Performance objectives, how they are measured, what blocks a release |
-| 10 | [decisions.md](decisions.md) | The decision log (ADRs), including rejected alternatives |
-| 11 | [roadmap.md](roadmap.md) | Implementation milestones and what blocks 1.0 |
-| 12 | [contributing.md](contributing.md) | How to work on this repository |
+| 2 | [diagrams.md](diagrams.md) | How it works, in pictures — the mechanism before the details; not normative |
+| 3 | [architecture.md](architecture.md) | How the code is organised and why it is organised that way |
+| 4 | [structure.md](structure.md) | Where every file and directory lives, and where a new one goes |
+| 5 | [stack.md](stack.md) | Dependencies, tools and version policy, and why each was chosen |
+| 6 | [file-format.md](file-format.md) | The byte-level format — the one artifact that cannot change |
+| 7 | [security.md](security.md) | Threat model, guarantees, non-guarantees, disclosure |
+| 8 | [usage.md](usage.md) | How a developer actually uses the library |
+| 9 | [tests.md](tests.md) | The testing strategy — which is the argument for trusting the code |
+| 10 | [performance.md](performance.md) | Performance objectives, how they are measured, what blocks a release |
+| 11 | [decisions.md](decisions.md) | The decision log (ADRs), including rejected alternatives |
+| 12 | [roadmap.md](roadmap.md) | Implementation milestones and what blocks 1.0 |
+| 13 | [contributing.md](contributing.md) | How to work on this repository |
 
 [initial-spec.md](initial-spec.md) is the original approved design spec (2026-09-07). It is
 kept as a historical record and is **not** updated. Where these documents differ from it, they

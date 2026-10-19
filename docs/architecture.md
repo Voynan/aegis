@@ -1,7 +1,9 @@
 # Architecture
 
 How the code is organised, and why. The byte-level format lives in
-[file-format.md](file-format.md); this document is about the shape of the Python.
+[file-format.md](file-format.md); this document is about the shape of the Python. For the same
+structure in pictures — modules, key hierarchy, the seal and unseal flows — see
+[diagrams.md](diagrams.md).
 
 ---
 
