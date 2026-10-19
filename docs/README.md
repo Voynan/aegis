@@ -24,35 +24,54 @@ Everything here is normative unless a section says otherwise.
 kept as a historical record and is **not** updated. Where these documents differ from it, they
 say so explicitly and the reason is recorded in [decisions.md](decisions.md).
 
+## Plans
+
+Working plans live in [dev/](dev/). They are committed but **not normative**: when a plan and a
+document above disagree, the document wins and the plan gets fixed.
+
+| Plan | Answers |
+|---|---|
+| [dev/v2-django.md](dev/v2-django.md) | The plan for the Django adapter, after 1.0 |
+
+`dev/notes.md` and `dev/diary/` are personal notes and stay out of git.
+
 ## Status
 
-Pre-implementation. No code exists yet. The file format is frozen once
-[ADR-0013](decisions.md#adr-0013-freeze-the-format-at-milestone-m4) closes at milestone M4
-(see [roadmap.md](roadmap.md)).
+Pre-implementation. No code exists yet.
+
+The design review of 2026-10-18 revised the format before the freeze
+([ADR-0026](decisions.md#adr-0026-the-library-draws-every-data-key-key-sources-only-wrap-and-unwrap)
+to [ADR-0033](decisions.md#adr-0033-context-values-must-have-an-exactly-accepted-type)):
+- library-drawn data keys;
+- a per-file salt with key commitment;
+- a typed custody record that holds KMS wraps;
+- provable truncation errors.
+
+It also added pull-style and seekable readers, and moved the Django adapter to V2. The file
+format is frozen once [ADR-0013](decisions.md#adr-0013-freeze-the-format-at-milestone-m4) closes
+at milestone M4 (see [roadmap.md](roadmap.md)).
 
 ## Open questions
 
-Items that need a human decision before or during implementation are collected in
-[architecture.md § Open questions](architecture.md#16-open-questions). Resolved so far:
+Every question in [architecture.md § 16](architecture.md#16-open-questions) — Q1 to Q46 — is
+decided or moved to the V2 plan. Q27–Q46 were raised by the review of 2026-10-18.
 
-| Question | Resolution |
-|---|---|
-| Q1 — chunk AAD vs. rotation | AAD covers the immutable header core ([ADR-0014](decisions.md#adr-0014-chunk-aad-covers-the-immutable-header-core-only)) |
-| Q2 — KEK encoding in env vars | Strict base64 ([ADR-0015](decisions.md#adr-0015-keks-in-environment-variables-are-base64)) |
-| Q3 — empty `context` | Required argument; `{}` legal, `None` rejected ([ADR-0020](decisions.md#adr-0020-context-is-required-but-may-be-empty)) |
-| Q5 — domain separation | Labelled AAD hashes ([ADR-0019](decisions.md#adr-0019-domain-separated-aad-hashes)) |
-| Q6 — PyPI name | `aegis-voynan`, imported as `aegis` ([ADR-0018](decisions.md#adr-0018-distribute-as-aegis-voynan-import-as-aegis)) |
+| Group | Questions | Where decided |
+|---|---|---|
+| Format (settled before the M4 freeze) | Q1, Q3, Q5, Q6, Q25, Q27, Q29–Q32, Q45 | ADR-0014, 0018, 0019, 0020, 0026–0030, 0033 |
+| Public API and behaviour | Q7, Q10, Q12, Q20–Q23, Q26, Q36, Q38, Q40, Q46 | ADR-0026, 0031, 0032, 0036, 0037 |
+| Keys and custody | Q2, Q28, Q33, Q37 | ADR-0015, 0029 |
+| Rotation | Q8, Q9, Q11, Q15, Q43 | ADR-0035 |
+| CLI | Q13, Q14, Q24 | ADR-0036 |
+| Project and process | Q17, Q18, Q19, Q44 | ADR-0037, 0023 |
+| Claims corrected | Q34, Q35 | security.md §§ 1, 3, 5.2 |
+| Moved to V2 | Q4, Q16, Q39, Q41, Q42 | ADR-0034, [dev/v2-django.md](dev/v2-django.md) |
 
-Still open, by the milestone each must be decided before:
+Two decisions are actions for a person, and both are due now:
 
-| Before | Questions |
-|---|---|
-| M0 | Q17 (Hypothesis database), Q18 (PyPI name reservation) |
-| M1 | Q20 (error for a short non-Aegis file) |
-| M2 | Q19 (public review before the freeze), Q22 (the 2³² chunk limit) |
-| M3 | Q10 (`inspect` API), Q12 (`CustodyBlock` export), Q21 (`unseal_to_path` durability), Q23 (context check order), Q26 (custody-mode mismatches) |
-| M4 | Q9 if its format option is considered, Q25 (missing negative vector) |
-| M5 | Q8 (rotation on Windows), Q9 (torn writes), Q11 (rotation API), Q15 (recursive rotation) |
-| M6 | Q13 (CLI keys), Q14 (CLI context types), Q24 (`inspect` sizes) |
-| M7 | Q4 (unsaved Django instances), Q16 (the field's `Vault`) |
-| M9 | Q7 (`Receipt.kek_id`) |
+| Action | Due | Why |
+|---|---|---|
+| Publish the `0.0.0` placeholder that reserves `aegis-voynan` (Q18) | M0 | a pending publisher alone does not reserve the name |
+| Request public review of [file-format.md](file-format.md) (Q19) | before M2 | after the M4 freeze, a format finding costs a new format version |
+
+Questions for the Django adapter (V2-Q1 to V2-Q7) live in [dev/v2-django.md](dev/v2-django.md).

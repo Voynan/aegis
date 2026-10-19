@@ -24,8 +24,16 @@ this document turns it into targets.
 
 No Aegis code exists yet. The baseline measures a **model of the planned hot path**, built
 from the same primitives: read one segment ahead, build the nonce, `AESGCM.encrypt`, write to
-a discarding sink. The small-payload model runs the full per-file cost (three `os.urandom`
-calls, HKDF, the DEK wrap, both labelled SHA-256 hashes, one chunk).
+a discarding sink. The small-payload model runs the full per-file cost of the key schedule as
+it stood on that date (three `os.urandom` calls, HKDF, the DEK wrap, both labelled SHA-256
+hashes, one chunk).
+
+> **Re-measure at M3.** The key schedule of 2026-10-18
+> ([ADR-0027](decisions.md#adr-0027-a-per-file-salt-drives-the-key-schedule-and-the-header-commits-to-the-key))
+> draws two random values instead of three, and adds three HKDF derivations and one
+> constant-time comparison per file. Nothing changes per chunk, so P1, P2 and P11 are
+> unaffected by construction. The small-payload numbers (P5) move by microseconds and must be
+> measured again; the target leaves ample room.
 
 | Environment | |
 |---|---|
@@ -61,17 +69,18 @@ What the baseline shows:
 |---|---|---|---|---|
 | **P1** | Streaming efficiency: `seal` and `unseal` throughput relative to raw AES-GCM on 64 KiB segments, same machine, same run | **≥ 75 %** | 84 % | benchmark |
 | **P2** | Absolute throughput: single `seal` / `unseal` call, in-memory source → null sink | **≥ 1 GiB/s** on the reference runners | 4.9 GiB/s | benchmark |
-| **P3** | Constant memory: `tracemalloc` peak for `seal`, `unseal` and `unseal_to_path` of 512 MiB, both custody modes | **≤ 1 MiB** | 192 KiB | blocking test |
+| **P3** | Constant memory: `tracemalloc` peak for `seal`, `unseal`, `unseal_to_path`, `sealed` and `unsealed` (forward-only and seekable) of 512 MiB, every custody mode | **≤ 1 MiB** | 192 KiB | blocking test |
 | **P4** | Size independence: peak at 512 MiB versus peak at 16 MiB | **≤ +64 KiB** | — | blocking test |
-| **P5** | Small payloads: `seal_bytes` and `unseal_bytes` of 1 KiB, KEK custody | **p50 ≤ 50 µs, p99 ≤ 200 µs** | 11.4 / 16.7 µs | benchmark |
-| **P6** | Size overhead | **exactly** `94 + 16 × max(1, ⌈n / 65536⌉)` bytes | — | property test |
-| **P7** | Rotation I/O: per file, read exactly 94 bytes and write exactly 80; the body is never read | **exact** | — | blocking test |
+| **P5** | Small payloads: `seal_bytes` and `unseal_bytes` of 1 KiB, local-KEK custody | **p50 ≤ 50 µs, p99 ≤ 200 µs** | 11.4 / 16.7 µs (previous schedule) | benchmark |
+| **P6** | Size overhead | **exactly** `73 + custody_len + 16 × max(1, ⌈n / 65536⌉)` bytes — `139 + …` for a local KEK, `73 + …` caller-held | — | property test |
+| **P7** | Rotation I/O on the target file: read exactly `73 + custody_len` bytes and write exactly `custody_len` bytes at offset 73; the body is never read. The journal is one extra file of `50 + custody_len` bytes | **exact** | — | blocking test |
 | **P8** | Rotation CPU per file, excluding I/O | **≤ 1 ms** | — | benchmark |
-| **P9** | `aegis inspect` on a seekable file reads exactly 94 bytes (sizes come from `stat`) and never decrypts | **exact** | — | blocking test |
-| **P10** | Time to first byte: `unseal` emits the first plaintext after consuming at most `94 + 65552 + 1` bytes; `seal` writes the header before reading any plaintext | **exact** | — | blocking test |
+| **P9** | `aegis inspect` on a seekable file reads exactly `73 + custody_len` bytes (sizes come from `stat`) and never decrypts | **exact** | — | blocking test |
+| **P10** | Time to first byte: `unseal` emits the first plaintext after consuming at most the header `+ 65552 + 1` bytes; `seal` writes the header before reading any plaintext | **exact** | — | blocking test |
 | **P11** | Parallel scaling: 4 whole `seal` calls in `ThreadPoolExecutor(4)` on ≥ 4 physical cores, versus 1 | **≥ 2×** | 2.6× | benchmark |
-| **P12** | Import isolation: `import aegis` loads neither `django`, `click` nor `aegis.cli` | **exact** | — | blocking test |
+| **P12** | Import isolation: `import aegis` loads neither `click` nor `aegis.cli` | **exact** | — | blocking test |
 | **P13** | Import time: `import aegis`, including `cryptography` | **≤ 50 ms** on the reference runners | ≈ 9 ms for `cryptography` | benchmark |
+| **P14** | Random access: opening a seekable `unsealed` reader on a valid file decrypts exactly one chunk (the last); a read of *k* bytes at any offset decrypts at most `⌈k / 65536⌉ + 1` chunks | **exact** | — | blocking test |
 
 Notes:
 
@@ -82,9 +91,15 @@ Notes:
   ceiling [tests.md § 5](tests.md#5-layer-4--constant-memory-as-a-tested-invariant) asks for.
 - `tracemalloc` sees only Python allocations. Memory allocated inside OpenSSL is not counted.
   Process RSS is too noisy to gate on.
-- **P7, P9 and P10** are counted with a stream wrapper that records every `read` and `write`.
+- **P7, P9, P10 and P14** are counted with a stream wrapper that records every `read`,
+  `write` and `seek`, and a counter around chunk decryption.
 - P6 is already implied by [file-format.md § 4.1](file-format.md#41-framing); listing it here
   makes size accounting a named promise.
+- **Rotation is `fsync`-bound, not CPU-bound.** P8 bounds the CPU; the wall-clock cost of
+  rotating a tree is dominated by a few `fsync`s per file (the journal of
+  [ADR-0035](decisions.md#adr-0035-rotation-write-path-torn-write-journal-public-calls-recursive-runs)),
+  so it scales with the number of files, never with their size. That is deliberately not a
+  throughput objective: it measures the disk.
 
 ## 4. Reference hardware
 
@@ -121,14 +136,14 @@ benchmarks/
 - **Import time:** at least 10 fresh interpreters, taking the median.
 - **Output:** `pytest-benchmark` JSON, uploaded as a workflow artifact on every run, with
   a trend kept across releases.
-- The blocking tests (P3, P4, P6, P7, P9, P10, P12) live in `tests/invariants/` and
+- The blocking tests (P3, P4, P6, P7, P9, P10, P12, P14) live in `tests/invariants/` and
   `tests/property/`, not in `benchmarks/`.
 
 ## 6. Gates
 
 | Kind | Objectives | When | A miss… |
 |---|---|---|---|
-| Blocking test | P3, P4, P6, P7, P9, P10, P12 | every PR, every matrix cell | fails the PR |
+| Blocking test | P3, P4, P6, P7, P9, P10, P12, P14 | every PR, every matrix cell | fails the PR |
 | Benchmark | P1, P2, P5, P8, P11, P13 | weekly, on release tags, manually | opens an issue |
 | Release check | all benchmarks | the release candidate, on both reference runners | **blocks the release** — 1.0 and every minor |
 
@@ -155,5 +170,5 @@ is investigated before release, even if still above target.
 - **Loosening a target:** the same, plus the reason in the PR description. Loosening P3 or P4
   also needs a reviewer's explicit agreement, as
   [tests.md § 5](tests.md#5-layer-4--constant-memory-as-a-tested-invariant) already requires.
-- **Changing an exact objective** (P6, P7, P9, P10) is a format or architecture change and
-  follows those documents' rules instead.
+- **Changing an exact objective** (P6, P7, P9, P10, P14) is a format or architecture change
+  and follows those documents' rules instead.

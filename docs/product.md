@@ -39,28 +39,36 @@ directly and will find Aegis' opinions constraining. That is the intended trade.
 
 | Capability | What it means in practice |
 |---|---|
-| **Envelope encryption** | A fresh data key per file, wrapped by your master key. You never handle key bytes. |
-| **Streaming, constant memory** | A 10 GB file uses the same RAM as a 10 KB one. No `.read()` of the whole file. |
+| **Envelope encryption** | A fresh data key per file, drawn by Aegis and wrapped by your master key or your KMS. You never handle key bytes. |
+| **Streaming, constant memory** | A 10 GB file uses the same RAM as a 10 KB one, whether you push into a stream or pull from one. No `.read()` of the whole file. |
+| **Random access** | Seek inside a sealed file without decrypting what comes before it. The size is authenticated first, so a truncated file never looks complete. |
 | **A versioned, self-describing format** | Files carry their version and suite. Frozen test vectors guarantee today's file opens in five years. |
-| **Binary output, ~0.024 % overhead** | 16 bytes per 64 KiB chunk. A 100 MB file becomes 100.02 MB — not 133 MB, as base64 would make it. |
+| **Binary output, ~0.024 % overhead** | 16 bytes per 64 KiB, plus a 139-byte header (73 when the caller holds the key). A 100 MB file becomes 100.02 MB — not 133 MB, as base64 would make it. |
 | **Mandatory context binding** | Every blob is cryptographically bound to its record. User 42's ciphertext will not open as user 99. |
-| **Key rotation in minutes** | Rotating re-wraps an 80-byte custody block per file. File bodies are never re-encrypted or even read. |
+| **Key commitment** | A file opens under exactly one key, checked before its contents are read. A wrong key is reported as a wrong key. |
+| **Key rotation without touching file bodies** | Rotating re-wraps a small custody record per file — 66 bytes for a local key. Bodies are never re-encrypted or even read; the cost scales with the number of files, not their size. |
+| **Bring your own KMS** | Two methods over AWS KMS, Google Cloud KMS, Vault or an HSM, and the master key never enters your process. The format stores whatever they return, up to 4 KiB. |
 | **Truncation detection** | Cutting a file short is detected, not silently accepted as a shorter file. |
 | **A precise error hierarchy** | Actionable exceptions. No blanket `except Exception`, ever, anywhere in the library. |
 | **Secrets that resist logging** | `repr()` of every object that touches key material is redacted. No exception message contains a key or plaintext. |
 
-Four operations, and nothing else:
+Seal and unseal, in three shapes, and nothing else:
 
 ```python
-vault.seal(src, dst, context=...)          # streaming — the main path
+vault.seal(src, dst, context=...)          # push: into a stream you own — the main path
 vault.unseal(src, dst, context=...)
+vault.sealed(src, context=...)             # pull: a stream you read from
+vault.unsealed(src, context=...)           #       seekable when src is
 vault.seal_bytes(data, context=...)        # sugar when you already hold the bytes
 vault.unseal_bytes(blob, context=...)
 ```
 
-Plus one safety helper, `vault.unseal_to_path()`, which writes atomically.
+Plus one safety helper, `vault.unseal_to_path()`, which writes atomically, and the operations
+side: `vault.rotate()`, `vault.rewrap()` and `aegis.inspect()`.
 
-Optional, behind extras: a Django field (`aegis[django]`) and a CLI (`aegis[cli]`).
+Optional, behind an extra: a CLI (`aegis-voynan[cli]`). A Django adapter is planned for V2
+([dev/v2-django.md](dev/v2-django.md)); until then the readers above plug into Django, FastAPI and
+boto3 directly ([usage.md § 10](usage.md#10-django-and-other-web-frameworks)).
 
 ## 4. What Aegis deliberately does not do
 
@@ -71,11 +79,11 @@ reason, recorded in [decisions.md](decisions.md).
 |---|---|
 | **Compression** | Compressing before encrypting leaks plaintext through ciphertext length (the CRIME class of attack). If you accept that risk for your data, compress before calling `seal`. |
 | **Plaintext hashing / blockchain anchoring** | Business logic of the consumer, not of a crypto library. Use `hashlib`. |
-| **Bundled KMS providers** (AWS KMS, Vault, HSM) | Aegis defines the extension point — two functions. Concrete providers live outside the core, so the core keeps one dependency. |
+| **Bundled KMS providers** (AWS KMS, Vault, HSM) | Aegis defines the extension point — two methods — and the format holds their output. Concrete providers live outside the core, so the core keeps one dependency. |
 | **A legacy-format reader** | There is no production user data in another format to preserve. Every byte of compatibility code is a byte of attack surface. |
 | **Browser-side / end-to-end encryption** | Would require a TypeScript or WASM implementation kept byte-for-byte in sync with this one. Out of 1.0. |
-| **An async API** | Encryption is CPU-bound. `async` buys nothing on its own here and would double the public surface and the test matrix. Run `seal` in a thread or process pool. |
-| **Password-derived keys** | 1.0 takes 32 bytes of high-entropy key material, not a passphrase. A password KDF (Argon2id) is a post-1.0 candidate, not an afternoon's work. |
+| **An async API** | Encryption is CPU-bound. `async` buys nothing on its own here and would double the public surface and the test matrix. Run `seal` in a thread or process pool; async servers read one chunk per thread hop ([usage.md § 10.3](usage.md#103-serving-a-file-under-asgi-django)). |
+| **Password-derived keys** | 1.0 takes 32 bytes of high-entropy key material, not a passphrase. Derive a key with Argon2id yourself and use it as a KEK ([usage.md § 5.4](usage.md#54-password-derived-keys)); a built-in password KDF is a post-1.0 candidate. |
 | **Generic encryption of arbitrary values** | Aegis seals *files and byte blobs*. It is not a general-purpose cipher, and the `seal`/`unseal` vocabulary exists partly to discourage that use. |
 
 ## 5. How it compares
@@ -86,7 +94,7 @@ reason, recorded in [decisions.md](decisions.md).
 | **`Fernet`** | Simple, in the same package | Loads the whole plaintext into memory, has no envelope encryption, no AAD, no rotation story, and base64-encodes its output (+33 %). |
 | **`age` / pyrage** | The best security story — zero original cryptography, interoperable with the `age` CLI | Its X25519 identity model distorts the ergonomics exactly at key custody, which is the heart of this library, and rules out a custom AAD. Adds a native wheel. |
 | **Google Tink `StreamingAEAD`** | Audited, keysets and rotation built in | Imports Tink's conceptual weight — keysets, templates, primitives — against our simplicity requirement. The product would become "an easier way to use Tink", which is a different product. |
-| **Cloud KMS SDKs** | Keys never leave the HSM | Solve key custody but not file format, streaming, or per-record binding. Aegis is complementary: implement `KeySource` over your KMS. |
+| **Cloud KMS SDKs** | Keys never leave the HSM | Solve key custody but not file format, streaming, or per-record binding. Aegis is complementary: implement `KeySource` over your KMS and the file carries its wrapped key. |
 
 ## 6. Compatibility promise
 
@@ -99,19 +107,20 @@ reason, recorded in [decisions.md](decisions.md).
   writing it requires an explicit opt-in; reading v1 keeps working.
 - **Reading a future version fails loudly** with `UnsupportedVersion` and the message
   "upgrade aegis" — never with a partial or garbage decryption.
-- **Python support** follows the [SPEC 0](https://scientific-python.org/specs/spec-0000/)
-  style: 3.10+ at 1.0; a minor Python drop is a minor Aegis release, announced one release
-  ahead.
+- **Python support** follows CPython's own support window
+  ([ADR-0023](decisions.md#adr-0023-python-floor-follows-cpythons-support-window)): every
+  version that still receives security fixes — 3.11 to 3.14 for a 1.0 before 2027-10-31.
+  Dropping a version is a minor Aegis release, announced one release ahead.
 
 ## 7. Project shape
 
 - **License:** MIT (see [`LICENSE`](../LICENSE)).
-- **Dependencies:** one — `cryptography`. Extras add `django` and `click` (or `typer`).
+- **Dependencies:** one — `cryptography`. The `[cli]` extra adds `click`.
 - **Distribution:** PyPI as `aegis-voynan` (imported as `aegis`,
   [ADR-0018](decisions.md#adr-0018-distribute-as-aegis-voynan-import-as-aegis)). Pure Python;
   no native wheels of our own.
 - **Status:** pre-1.0, pre-implementation. See [roadmap.md](roadmap.md).
-- **Security reports:** see [security.md § Reporting a vulnerability](security.md#8-reporting-a-vulnerability).
+- **Security reports:** see [security.md § 8](security.md#8-reporting-a-vulnerability).
 
 ## 8. The honest sentence
 

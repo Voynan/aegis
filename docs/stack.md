@@ -23,17 +23,17 @@ alternatives. Versions named here are the floor or the pin **as of 2026-09-14**.
 
 | Layer | Choice | Version policy |
 |---|---|---|
-| Language | CPython | 3.10+ per current docs; **see § 3.1 (proposed change)** |
+| Language | CPython | 3.11–3.14 ([ADR-0023](decisions.md#adr-0023-python-floor-follows-cpythons-support-window)) |
 | Cryptography | `cryptography` | `>=44.0`, no ceiling |
-| Build backend | Hatchling | pinned in `[build-system]` ([ADR-0022](decisions.md#adr-0022-hatchling-as-the-build-backend), proposed) |
+| Build backend | Hatchling | pinned in `[build-system]` ([ADR-0022](decisions.md#adr-0022-hatchling-as-the-build-backend)) |
 | Project and environment tool | `uv` | `required-version`, pinned in CI ([ADR-0024](decisions.md#adr-0024-uv-for-development-and-ci)) |
 | Distribution | PyPI `aegis-voynan`, pure-Python wheel + sdist | [ADR-0018](decisions.md#adr-0018-distribute-as-aegis-voynan-import-as-aegis) |
-| CLI extra | `click` | `>=8.1` ([ADR-0021](decisions.md#adr-0021-the-cli-is-built-on-click), proposed) |
-| Django extra | Django | `>=5.2` (current LTS) |
+| CLI extra | `click` | `>=8.1` ([ADR-0021](decisions.md#adr-0021-the-cli-is-built-on-click)) |
+| Django | — | not a 1.0 dependency; the adapter is V2 ([ADR-0034](decisions.md#adr-0034-the-django-adapter-moves-to-v2)) |
 | Lint + format | `ruff`, rules in § 6.3 | locked in `uv.lock` |
 | Types | `mypy --strict` | locked |
 | Supply-chain checks | `pip-audit` (dependencies), `zizmor` (workflows) | locked |
-| Tests | `pytest`, `pytest-cov`, `hypothesis`, `pytest-django` | locked |
+| Tests | `pytest`, `pytest-cov`, `hypothesis` | locked |
 | Mutation testing | `mutmut` | locked |
 | Benchmarks | `pytest-benchmark` | locked |
 | Git hooks | `pre-commit` | locked |
@@ -44,27 +44,22 @@ alternatives. Versions named here are the floor or the pin **as of 2026-09-14**.
 
 ### 3.1 Python
 
-The documents currently say **3.10+ at 1.0, SPEC 0 style**, with a CI matrix of 3.10–3.13.
-That no longer matches the calendar:
+**Decision ([ADR-0023](decisions.md#adr-0023-python-floor-follows-cpythons-support-window),
+accepted 2026-10-18):** each release supports every CPython that still receives security fixes
+on its release date — **3.11 to 3.14** for a 1.0 before 2027-10-31. The CI matrix is 3.11–3.14.
 
 | Version | Released | End of life |
 |---|---|---|
-| 3.10 | 2021-10 | **2026-10-31** — six weeks from now |
+| 3.10 | 2021-10 | **2026-10-31** — before any Aegis release; not supported |
 | 3.11 | 2022-10 | 2027-10-31 |
 | 3.12 | 2023-10 | 2028-10-31 |
 | 3.13 | 2024-10 | 2029-10-31 |
-| 3.14 | 2025-10 | 2030-10-31 — current, missing from the CI matrix |
+| 3.14 | 2025-10 | 2030-10-31 |
 
-- A 3.10 floor means shipping a security library whose minimum interpreter no longer gets
-  security fixes on release day.
-- Strict SPEC 0 (support versions released in the last three years) would put the floor at
-  3.13 by 1.0, excluding Debian 12 (3.11) and many Django 5.2 LTS deployments.
-
-**Proposal ([ADR-0023](decisions.md#adr-0023-python-floor-follows-cpythons-support-window),
-proposed):** the floor is the oldest CPython still receiving security fixes when a release
-ships — **3.11** for a 1.0 before 2027-10-31 — and the CI matrix is 3.11–3.14. Until it is
-accepted, [product.md](product.md), [architecture.md](architecture.md) and
-[tests.md](tests.md) keep 3.10–3.13.
+- A 3.10 floor would have meant shipping a security library whose minimum interpreter no longer
+  gets security fixes on release day.
+- Strict SPEC 0 (versions released in the last three years) would put the floor at 3.13 by 1.0,
+  excluding Debian 12 (3.11) and many deployments the target users run.
 
 CI installs interpreters with `uv python install`, so the matrix does not depend on what a
 runner image ships. Free-threaded builds (`3.13t`, `3.14t`) are not in the 1.0 matrix.
@@ -75,8 +70,12 @@ Used for exactly two primitives, and nothing else:
 
 | Import | For |
 |---|---|
-| `cryptography.hazmat.primitives.ciphers.aead.AESGCM` | chunk encryption, DEK wrap |
-| `cryptography.hazmat.primitives.kdf.hkdf.HKDF` | wrapping-key derivation |
+| `cryptography.hazmat.primitives.ciphers.aead.AESGCM` | chunk encryption, local DEK wrap |
+| `cryptography.hazmat.primitives.kdf.hkdf.HKDF` | the per-file key schedule (body key, nonce prefix, commitment) and the wrap key |
+
+`AESGCM.encrypt_into`/`decrypt_into` and `HKDF.extract` arrived in `cryptography` 47.0. They
+would save one allocation per chunk and two HMACs per file. They are an optimization for a
+later floor raise, not a 1.0 requirement; the code uses one path, the one the floor supports.
 
 - **Floor `>=44.0`** (2024-11). `cryptography` maintains only its latest release, so a floor
   is a courtesy to applications that pin, not a support branch. 44.0 ships `abi3` wheels
@@ -94,17 +93,19 @@ Used for exactly two primitives, and nothing else:
 
 | Module | Used for |
 |---|---|
-| `hashlib` | SHA-256 for `kek_id` and the AAD hashes |
-| `os` | `urandom` (DEK, salt, `nonce_prefix`), `replace` and `fsync` (`unseal_to_path`) |
+| `hashlib` | SHA-256 for `kek_id`, the AAD hashes, the custody AAD and the rotation journal's checksum |
+| `hmac` | `compare_digest` for the key commitment |
+| `os` | `urandom` (DEK and salt, in `vault.py` only); `replace` and `fsync` (`unseal_to_path`); `pwrite` and `fsync` (rotation) |
 | `base64` | strict KEK decoding (`b64decode(..., validate=True)`, [ADR-0015](decisions.md#adr-0015-keks-in-environment-variables-are-base64)) |
-| `io`, `tempfile` | stream handling; the temporary file of `unseal_to_path`, in the destination directory |
-| `dataclasses` | frozen `Header`, `CustodyBlock`, `Receipt` |
+| `io`, `tempfile` | stream handling and the readers; the temporary file of `unseal_to_path`, in the destination directory |
+| `dataclasses` | frozen `Header`, `Receipt`, `FileInfo`, `RotationResult` |
 | `typing` | `Protocol` for `KeySource` |
 | `logging` | the `aegis` logger with a `NullHandler` |
 | `importlib.metadata` | `aegis.__version__`, resolved lazily so it costs nothing at import |
 
-**Platform note.** `os.pwrite` does not exist on Windows, but the rotation design assumes it.
-See [architecture.md § 16, Q8](architecture.md#16-open-questions).
+**Platform note.** `os.pwrite` does not exist on Windows; rotation falls back to one `seek` and
+one `write`, then `fsync`
+([ADR-0035](decisions.md#adr-0035-rotation-write-path-torn-write-journal-public-calls-recursive-runs)).
 
 ## 4. Optional extras
 
@@ -119,13 +120,13 @@ See [architecture.md § 16, Q8](architecture.md#16-open-questions).
   `python -m aegis.cli`.
 - **Isolation:** `import aegis` never imports `click` (a test checks `sys.modules`).
 
-### 4.2 `[django]` — Django
+### 4.2 Django — not in 1.0
 
-- **Floor `>=5.2`**, the current LTS (end of life 2028-04). 4.2 LTS already reached end of
-  life in 2026-04.
-- **Tested against** 5.2 LTS on the lowest supported Python and the latest release (6.1
-  today) on the newest. Django 6.x requires Python 3.12+.
-- Integration tests use `pytest-django`.
+The `[django]` extra and `pytest-django` arrive with the adapter in V2
+([ADR-0034](decisions.md#adr-0034-the-django-adapter-moves-to-v2)). The plan records the
+version policy to start from: floor at the LTS current on the adapter's release date (5.2 LTS
+today, end of life 2028-04), tested against that LTS on the lowest supported Python and the
+latest release on the newest ([dev/v2-django.md](dev/v2-django.md)).
 
 ## 5. Packaging
 
@@ -151,19 +152,18 @@ build-backend = "hatchling.build"
 [project]
 name = "aegis-voynan"
 version = "0.0.0"
-requires-python = ">=3.10"          # 3.11 if ADR-0023 is accepted
+requires-python = ">=3.11"          # ADR-0023
 license = "MIT"
 dependencies = ["cryptography>=44.0"]
 
 [project.optional-dependencies]      # published: what users can ask for
-cli    = ["click>=8.1"]
-django = ["django>=5.2"]
+cli = ["click>=8.1"]                 # [django] arrives with the V2 adapter (ADR-0034)
 
 [dependency-groups]                  # not published: exact versions live in uv.lock
 dev = [
   "ruff>=0.16.7", "mypy>=2.3.1",
   "pytest>=9.1.1", "pytest-cov>=7.1.0", "hypothesis>=6.168.0",
-  "pytest-django>=4.14.0", "pytest-benchmark>=5.3.0",
+  "pytest-benchmark>=5.3.0",
   "mutmut>=3.8.0", "pre-commit>=4.6.2",
   "pip-audit>=2.9", "zizmor>=1.0",
 ]
@@ -205,7 +205,7 @@ in the same file: § 6.3.
 | The floor job becomes `--resolution lowest-direct` | The test matrix itself |
 
 **`pip` still works** for contributors who prefer it. pip 25.1+ reads dependency groups:
-`pip install -e ".[cli,django]" --group dev`. Without the lockfile you get the latest
+`pip install -e ".[cli]" --group dev`. Without the lockfile you get the latest
 compatible tools instead of the locked ones, so CI remains the reference.
 
 ### 6.2 Tools
@@ -218,9 +218,8 @@ compatible tools instead of the locked ones, so CI remains the reference.
 | `pytest` | 9.1.1 | the suite |
 | `pytest-cov` | 7.1.0 | per-file coverage gates ([tests.md § 8](tests.md#8-coverage)) |
 | `hypothesis` | 6.168.0 | round-trip and adversarial properties |
-| `pytest-django` | 4.14.0 | adapter integration tests |
 | `pytest-benchmark` | 5.3.0 | the benchmark suite ([performance.md](performance.md)) |
-| `mutmut` | 3.8.0 | mutation testing of `stream.py`, `format.py`, `context.py` |
+| `mutmut` | 3.8.0 | mutation testing of `stream.py`, `envelope.py`, `format.py`, `context.py` |
 | `pre-commit` | 4.6.2 | local hooks: `ruff check`, `ruff format`, `uv lock --check` |
 | `pip-audit` | locked at M0 | known vulnerabilities in the locked dependency tree |
 | `zizmor` | locked at M0 | security lint of `.github/workflows/` (injection, unpinned actions, token scope) |
@@ -272,15 +271,14 @@ convention = "google"                   # `Raises:` names the exception the call
 max-complexity = 10
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
-"os.urandom".msg = "Randomness enters only in keys.py, vault.py and rotate.py (architecture.md § 4)."
+"os.urandom".msg = "Randomness enters only in vault.py (architecture.md § 4, ADR-0026)."
 "os.environ".msg = "The environment is read only in keys.py (architecture.md § 4)."
 "os.getenv".msg  = "The environment is read only in keys.py (architecture.md § 4)."
 "click".msg      = "`import aegis` must never import click (ADR-0021). Only aegis.cli may."
 
 [tool.ruff.lint.per-file-ignores]
-"src/aegis/keys.py"   = ["TID251"]      # the edges: randomness and the environment
-"src/aegis/vault.py"  = ["TID251"]
-"src/aegis/rotate.py" = ["TID251"]
+"src/aegis/keys.py"   = ["TID251"]      # the edges: the environment
+"src/aegis/vault.py"  = ["TID251"]      # the edges: randomness
 "src/aegis/cli/**"    = ["TID251"]
 "tests/**"            = ["S101", "D", "TID251"]
 ```
@@ -370,19 +368,19 @@ locked `uv` version, then `uv sync --locked`, which fails if `uv.lock` is stale.
 | Rust, C, Cython extensions | Pure-Python promise; the hot path is already native inside OpenSSL. |
 | PyNaCl, `pyrage`, Tink | [ADR-0001](decisions.md#adr-0001-build-the-cryptographic-core-on-cryptography-using-stream). |
 | `anyio` / asyncio wrappers | [ADR-0007](decisions.md#adr-0007-no-async-api-in-10). |
-| `pydantic`, `attrs` | `dataclasses` covers four frozen records. |
+| `pydantic`, `attrs` | `dataclasses` covers a handful of frozen records. |
+| Django, `pytest-django` (in 1.0) | The adapter is V2 ([ADR-0034](decisions.md#adr-0034-the-django-adapter-moves-to-v2)). |
 | `rich`, `colorama` | Plain CLI output; nothing to colour. |
 | `black`, `isort`, `flake8`, `bandit`, `pyupgrade` | `ruff` implements all five (`ruff format`, `I`, `E`/`F`, `S`, `UP`) in one locked tool. |
 | `pyright` | One type checker. Two would disagree on edge cases and double the suppressions. |
 
 ## 9. Open items
 
-- **ADR-0021** (`click`) and **ADR-0022** (Hatchling): proposed.
-- **ADR-0023** (Python floor 3.11, matrix 3.11–3.14): proposed. Accepting it updates
-  product.md § 6, architecture.md § 14 and tests.md § 9.
-- **Q8** (rotation on Windows) and **Q9** (torn writes during rotation):
-  [architecture.md § 16](architecture.md#16-open-questions).
-- **Q17** (Hypothesis database — decides an `.gitignore` entry) and **Q18** (PyPI name
-  reservation) block M0: [architecture.md § 16](architecture.md#16-open-questions).
+- **ADR-0021** (`click`), **ADR-0022** (Hatchling) and **ADR-0023** (Python 3.11–3.14):
+  accepted on 2026-10-18.
+- **Q8** and **Q9** (rotation on Windows, torn writes) are decided by
+  [ADR-0035](decisions.md#adr-0035-rotation-write-path-torn-write-journal-public-calls-recursive-runs);
+  **Q17** (`.hypothesis/` is ignored) and **Q18** (a `0.0.0` placeholder reserves the name) by
+  [ADR-0037](decisions.md#adr-0037-smaller-resolutions). Nothing blocks M0.
 - A documentation site (MkDocs, Sphinx) is not chosen. The docs stay Markdown in the
   repository until after 1.0.

@@ -9,13 +9,15 @@ intended 1.0 API; no code exists yet.
 
 ```bash
 pip install aegis-voynan              # core — one dependency: cryptography
-pip install "aegis-voynan[django]"    # + the Django field
 pip install "aegis-voynan[cli]"       # + the aegis command
 ```
 
 The PyPI name is `aegis-voynan`; everything else is `aegis` — `import aegis`, the `aegis`
 command. Do not install it next to the unrelated `aegis` distribution (an aiohttp auth
 library): both ship a top-level `aegis` package and would overwrite each other.
+
+A Django adapter is planned for V2 ([dev/v2-django.md](dev/v2-django.md)). § 10 shows how to use the
+core from Django, FastAPI and S3 today.
 
 ## 2. Sixty seconds
 
@@ -51,21 +53,29 @@ vault = Vault(key=EnvKey("AEGIS_MASTER_KEY"))
 Build it once at startup (module level, a Django setting, a FastAPI dependency) and share
 it. A `Vault` is immutable and safe to use from multiple threads.
 
-### 3.1 The four operations
+### 3.1 Seal and unseal, in three shapes
 
 ```python
-# streaming — the main path, constant memory whatever the file size
-receipt = vault.seal(src_stream, dst_stream, context={...})
-vault.unseal(src_stream, dst_stream, context={...})
+# push — you own the destination stream; constant memory
+receipt = vault.seal(src, dst, context={...})
+vault.unseal(src, dst, context={...})
 
-# sugar for when you already hold the bytes — O(n) memory, by definition
+# pull — you get a stream to read from; constant memory
+reader = vault.sealed(src, context={...})       # read() returns the sealed container
+reader = vault.unsealed(src, context={...})     # read() returns plaintext; seekable if src is
+
+# bytes — you already hold everything; O(n) memory, by definition
 blob = vault.seal_bytes(data, context={...})
 data = vault.unseal_bytes(blob, context={...})
 ```
 
+Push when you write to a file or a socket you own. Pull when an API wants something to *read
+from*: a storage backend, an HTTP response, a boto3 upload.
+
 `src` and `dst` are any binary file-like objects: real files, `BytesIO`, sockets, a Django
-`UploadedFile`, an S3 body. They are read and written forward only, never seeked, so pipes
-work.
+`UploadedFile`, an S3 body. Short reads and partial writes are handled; segment boundaries never
+depend on how much one `read()` returned. Non-blocking and text streams are rejected with
+`UsageError`.
 
 ### 3.2 And one safety helper
 
@@ -73,7 +83,8 @@ work.
 vault.unseal_to_path(src_stream, "out.pdf", context={...})
 ```
 
-Use this whenever the destination is a path on disk. See § 7 for why it matters.
+Use this whenever the destination is a path on disk: it writes atomically and durably, and the
+file is created with mode `0600`. See § 7 for why it matters.
 
 ### 3.3 The receipt
 
@@ -82,16 +93,43 @@ receipt = vault.seal(src, dst, context={...})
 receipt.size        # plaintext bytes processed
 receipt.algorithm   # "AES-256-GCM/STREAM"
 receipt.version     # 1
+receipt.key_id      # the 16-byte id of the key that wrapped the DEK; None when caller-held
 receipt.key         # bytes, in CallerHeld mode only; None otherwise
 repr(receipt)       # "Receipt(size=1024, …, key=<redacted 32 bytes>)" — never the key
 ```
+
+### 3.4 The readers
+
+```python
+with vault.unsealed(src, context={...}) as reader:
+    reader.size                  # the authenticated plaintext size if src is seekable, else None
+    reader.seek(1_000_000)       # random access, when src is seekable
+    part = reader.read(4096)
+    for chunk in reader.chunks():    # up to 64 KiB each
+        ...
+
+reader = vault.sealed(src, context={...})
+s3.upload_fileobj(reader, "bucket", "contract.aegis")
+receipt = reader.receipt         # available once the reader has been read to the end
+```
+
+- **Errors come early.** Opening an unsealed reader checks the header, recovers the key and
+  verifies the key commitment. With a seekable source, it also authenticates the final chunk.
+  `UnknownKek`, `KeyMismatch` and a truncated seekable file raise at open, before you read a
+  byte.
+- **A reader owns its source.** Closing the reader closes `src`, as `io` wrappers do.
+- **`chunks()` closes the reader** when it is exhausted or abandoned, so it can go straight into a
+  streaming HTTP response.
+- **Readers have no `name`.** Pass the filename and content type to your framework yourself;
+  a ciphertext's name would give the wrong size.
+- **One reader, one thread.** Readers are not thread-safe.
 
 ## 4. `context`: the one thing to get right
 
 `context` is mandatory and becomes the AEAD's associated data. It binds the blob to its
 record: a ciphertext belonging to user 42 will not open as user 99 — authentication simply
-fails. If your database is swapped row-for-row, or a blob is copied from one record to
-another, decryption stops rather than succeeding on the wrong file.
+fails. If your database is swapped row-for-row, or a blob is copied to a record with a
+different context, decryption stops rather than succeeding on the wrong file.
 
 To open a file you must reproduce the same context. **Losing it means not opening the
 file, and that is the intent.**
@@ -108,17 +146,28 @@ file, and that is the intent.**
    leaks nothing — but it is also not a second password. Its job is binding, not secrecy.
 
 ```python
-# good — immutable identifiers
-context={"tenant": "acme", "document_id": str(doc.uuid)}
+# good — immutable identifiers of this file and this version of it
+context={"tenant": "acme", "document_id": str(doc.uuid), "revision": doc.revision}
 
-# risky — breaks the day a document is reassigned
+# risky — every file of one owner is interchangeable, and a transfer breaks them all
 context={"user_id": doc.owner_id}
 
 # broken — not reproducible
 context={"read_at": time.time()}   # also rejected: floats raise UsageError
 ```
 
-### 4.2 Accepted types
+### 4.2 Name the file, not only its owner
+
+Two blobs sealed under equal contexts are interchangeable. Aegis proves a blob is genuine and
+bound to its context, but it cannot know which of two genuine blobs is the current one. An
+attacker with write access to your storage could:
+- restore an older version of a document (rollback);
+- swap two documents of the same user, when the context names only the user.
+
+Include an identifier of the file, and a revision if files are replaced under the same
+identifier, and keep it in your database ([security.md § 3](security.md#3-what-aegis-does-not-defend-against)).
+
+### 4.3 Accepted types
 
 | Type | Notes |
 |---|---|
@@ -128,10 +177,14 @@ context={"read_at": time.time()}   # also rejected: floats raise UsageError
 | `bool` | distinct from `0` / `1` — the encoding tags types |
 | `None` | a legitimate value |
 
+Types must match **exactly**. Subclasses are rejected with `UsageError`: `IntEnum`, `StrEnum`,
+Django's `SafeString`. So are `bytearray` and `memoryview`. Convert explicitly with `int(v)`,
+`str(v)` or `bytes(v)`.
+
 `float` is **rejected** with `UsageError`: its representation is not stable enough to be a
 cryptographic input. So are `dict`, `list`, `tuple`, `set`, `Decimal`, `datetime` and
-`Enum` — convert them yourself, deliberately, so the encoding is visible in your code
-rather than guessed by ours.
+`Enum`. Convert them yourself, deliberately, so the encoding is visible in your code rather
+than guessed by ours.
 
 Ordering does not matter: `{"a": 1, "b": 2}` and `{"b": 2, "a": 1}` produce the same bytes
 ([file-format.md § 5](file-format.md#5-canonical-serialization-of-context)).
@@ -142,12 +195,14 @@ choice in your code, not an accident.
 
 ## 5. Key custody: the only knob
 
-The `key` argument is the only thing that changes between the two modes.
+The `key` argument is the only thing that changes between the three modes.
 
-### 5.1 Server holds the key (the default)
+### 5.1 Your server holds the key
 
 ```python
-vault = Vault(key=EnvKey("AEGIS_MASTER_KEY"))
+vault = Vault(key=EnvKey("AEGIS_MASTER_KEY"))                  # base64 in an environment variable
+vault = Vault(key=FileKey("/run/secrets/aegis_master_key"))    # base64 in a mounted secret file
+vault = Vault(key=BytesKey(secrets_client.get("aegis-kek")))   # 32 bytes you fetched yourself
 receipt = vault.seal(src, dst, context={...})
 receipt.key   # None — the data key is wrapped inside the file
 ```
@@ -155,7 +210,41 @@ receipt.key   # None — the data key is wrapped inside the file
 The server can read every file it stores. This is what you want for a normal product where
 the application renders, indexes or processes user documents.
 
-### 5.2 The caller holds the key
+All three validate at construction, so a bad key fails at startup with `ConfigurationError`,
+never in the middle of an upload. A key must:
+- decode to exactly 32 bytes;
+- look random: Aegis rejects a key whose bytes are all printable characters, which is what a
+  base64-encoded passphrase looks like;
+- appear only once across `primary` and `previous`.
+
+`FileKey` accepts the file with or without one trailing newline. In production, prefer
+`FileKey` or `BytesKey` to `EnvKey`: environment variables are inherited by child processes and
+readable through `/proc` ([security.md § 5.1](security.md#51-choosing-a-key-source)).
+
+### 5.2 Your KMS holds the key
+
+```python
+class MyKms:                 # satisfies aegis.KeySource; no import needed at runtime
+    key_id: bytes            # 16 bytes identifying the KMS key in use
+    capacity: int            # the most bytes wrap() ever returns
+
+    def wrap(self, dek: bytes, aad: bytes) -> bytes: ...
+    def unwrap(self, key_id: bytes, payload: bytes, aad: bytes) -> bytes: ...
+
+vault = Vault(key=MyKms(...))
+```
+
+- **Aegis draws the data key.** Your source only wraps and unwraps it, and stores up to
+  `capacity` bytes in the header.
+- **Bind `aad`.** Pass it as the encryption context or additional authenticated data when your
+  KMS supports one.
+- **Errors from `unwrap`.** Raise `UnknownKek` for a key id you do not manage, and
+  `KeyMismatch` when your KMS rejects the payload as an invalid ciphertext.
+
+The master key never enters your process. A worked sketch over AWS KMS is in
+[architecture.md § 6](architecture.md#6-the-custody-seam).
+
+### 5.3 The caller holds the key
 
 ```python
 from aegis import Vault, CallerHeld
@@ -167,63 +256,93 @@ receipt.key      # 32 bytes — give these to the user; Aegis stores nothing
 vault.unseal(src, dst, context={...}, key=user_key)   # required in this mode
 ```
 
-Nothing about the key is persisted. **If the user loses it, the file is gone** — there is
-no recovery, by design. That key is 32 bytes of high-entropy material generated by Aegis,
-not a passphrase; Aegis 1.0 has no password-based key derivation. If you need one, derive a
-32-byte key with Argon2id yourself and pass it as the caller key.
+Nothing about the key is persisted. **If the user loses it, the file is gone** — there is no
+recovery, by design. A wrong key raises `KeyMismatch`, before any byte of the body is read.
+
+`seal_bytes` raises `UsageError` in this mode: it returns only the blob, so the key would be
+lost. Use `seal` or `sealed`, whose `Receipt` carries the key.
+
+### 5.4 Password-derived keys
+
+Aegis 1.0 has no password-based key derivation of its own. If you need one, derive 32 bytes with
+Argon2id yourself and use them as a **KEK**:
+
+```python
+kek = argon2id(password, salt=user_salt, length=32)   # your Argon2id library and parameters
+vault = Vault(key=BytesKey(kek))
+```
+
+A KEK wraps a fresh data key for every file. Never use a derived key as a caller key (§ 5.3):
+a caller key *is* the data key, and one key would then encrypt every file.
+
+The header's `key_id` lets an attacker who holds a file test password guesses offline at
+Argon2id's cost per guess. Choose Argon2id parameters with that in mind.
 
 ## 6. Errors, and what to do about each
 
 ```
 AegisError
-├── ConfigurationError    → your startup is wrong. Fix the env var; this never happens at runtime.
+├── ConfigurationError    → your startup is wrong. Fix the key or its source; never happens at runtime.
 ├── FormatError
 │   ├── NotAnAegisFile    → this is not an Aegis file. Wrong path, or a double-decrypt.
 │   ├── UnsupportedVersion→ written by a newer Aegis. Upgrade the library.
-│   └── MalformedHeader   → the first 94 bytes are truncated or inconsistent.
+│   └── MalformedHeader   → the header is truncated or inconsistent.
 ├── UnknownKek            → you are missing a key, not looking at a broken file.
-│                           "sealed with KEK a3f1…; you have b7c2…"
-├── UnsealFailed          → "wrong key, wrong context, or corrupted file" — all three at once.
-│   └── TruncatedFile     → the file is incomplete. A failed upload, a partial copy.
+│                           "sealed with key a3f1… (local KEK); you have b7c2…"
+├── UnsealFailed          → "wrong context, or corrupted data" — the key is already verified.
+│   ├── KeyMismatch       → the key does not belong to this file: a wrong caller key,
+│   │                       or a custody record copied from another file.
+│   └── TruncatedFile     → the file is provably incomplete. A failed upload, a partial copy.
 └── UsageError            → your call is wrong. A float in context, CallerHeld without a key.
 ```
 
-**Why `UnsealFailed` is vague on purpose.** AES-GCM cannot tell a wrong key from a wrong
-context from a flipped bit — all three produce the same failure. A library that offered
-`WrongContextError` would be guessing, and would send you to debug the wrong thing. So the
-message names all three possibilities, and the two cases that genuinely *are*
-distinguishable get their own class: `UnknownKek` (decided before any decryption) and
-`TruncatedFile` (decided by our own end-of-file marker).
+**Why `UnsealFailed` no longer says "wrong key".** AES-GCM alone cannot tell a wrong key from a
+wrong context from a flipped bit. Aegis checks the key first, against the commitment stored in
+the header, so a wrong key gets its own error, `KeyMismatch`. Once the body is being read the
+key is known to be right, and two causes remain: the context, or the data. A library that
+offered `WrongContextError` would still be guessing between those two.
 
-**Debugging an `UnsealFailed`, in order:** (1) is the context byte-identical to what you
-sealed with — same keys, same types, `42` not `"42"`? (2) is the file complete — does its
-size match `94 + n + 16 × max(1, ceil(n/65536))`? (3) has the file been through anything
-text-oriented — a `TextIOWrapper`, a JSON round-trip, git without `-b`?
+**Truncation, precisely.** A cut that leaves no chunk, a sliver of 1–15 bytes, or ends exactly at
+a chunk boundary is provable and raises `TruncatedFile`. A cut inside a chunk looks exactly like
+corruption and raises `UnsealFailed`.
 
-> **Pending ([Q20, Q26](architecture.md#16-open-questions)).** The error raised for a non-Aegis
-> file shorter than 94 bytes (today `MalformedHeader`), and for a vault whose custody mode does
-> not match the file's, are not final.
+**Debugging an `UnsealFailed`, in order:**
+1. Is the context byte-identical to what you sealed with — same keys, same types, `42` not `"42"`?
+2. Is the file complete? `aegis inspect` prints `size consistent: no` for impossible sizes. A
+   complete file is exactly `header + n + 16 × max(1, ceil(n / 65536))` bytes, where the header is
+   139 bytes for a local KEK and 73 for caller-held.
+3. Has the file been through anything text-oriented — a `TextIOWrapper`, a JSON round-trip, git
+   without `-b`?
+
+**Custody mismatches** raise before any decryption:
+- a caller-held file opened by a server-custody vault, a server-custody file opened by
+  `CallerHeld()`, or `key=` passed to a server-custody vault → `UsageError`;
+- a file wrapped by your KMS opened with a local key, or the reverse → `UnknownKek`.
 
 ## 7. The streaming trust boundary — read this one
 
-`unseal` emits plaintext chunk by chunk. Every chunk it emits is authentic, but **the file
-is only proven complete when `unseal()` returns without raising.** If the file was
-truncated, your destination already holds a valid prefix of the plaintext when the
-exception arrives.
+A forward-only `unseal` emits plaintext chunk by chunk. Every chunk it emits is authentic, but
+**the file is only proven complete when `unseal()` returns without raising.** If the file was
+truncated, your destination already holds a valid prefix of the plaintext when the exception
+arrives.
 
-This is inherent to every streaming AEAD, not a defect of Aegis. Three ways to live with
-it:
+This is inherent to every streaming AEAD over a stream that cannot seek, not a defect of
+Aegis. Four ways to live with it:
 
 ```python
-# 1. Best: let Aegis write the file atomically. Nothing survives a failure.
+# 1. Best when the destination is a path: atomic and durable. Nothing survives a failure.
 vault.unseal_to_path(src, "out.pdf", context={...})
 
-# 2. Small payloads: all-or-nothing by construction.
+# 2. Best when the source can seek: truncation is caught at open, before any byte.
+with vault.unsealed(open("contract.aegis", "rb"), context={...}) as reader:
+    ...
+
+# 3. Small payloads: all-or-nothing by construction.
 data = vault.unseal_bytes(blob, context={...})
 
-# 3. Streaming to a client: do not act on bytes until unseal() has returned.
-#    Streaming an HTTP response body means the client may receive a truncated file
-#    with a 200 status. If that matters, buffer or use unseal_to_path first.
+# 4. Streaming from a non-seekable source to a client: do not act on bytes until the end.
+#    An HTTP client may receive a truncated file with a 200 status. If that matters,
+#    unseal from a seekable source or to a path first.
 ```
 
 ## 8. Rotating your master key
@@ -235,99 +354,216 @@ vault = Vault(key=EnvKey(primary="AEGIS_KEY_V2", previous=["AEGIS_KEY_V1"]))
 ```
 
 ```bash
-# 1. add AEGIS_KEY_V2 to the environment and deploy with `previous=[...]`
+# 1. add AEGIS_KEY_V2 to the environment and deploy with previous=[...]
 # 2. re-wrap every file
-aegis rotate ./bucket --recursive
+aegis rotate ./bucket --recursive --key-env AEGIS_KEY_V2 --previous-env AEGIS_KEY_V1
 # 3. remove AEGIS_KEY_V1 from the environment and from `previous`
 ```
 
-Rotation unwraps the data key with the old KEK and re-wraps it with the new one, rewriting
-80 bytes per file. On a local or network filesystem, a 10 TB bucket rotates in the time it
-takes to enumerate it.
+Rotation unwraps each data key with the old KEK and re-wraps it with the new one. Where it
+happens depends on the storage:
 
-> **Pending ([Q8, Q9](architecture.md#16-open-questions)).** Object stores such as S3 cannot
-> overwrite part of an object, so rotation there rewrites whole objects. Crash safety of
-> in-place rotation under power loss is not yet specified. Back up before rotating. During step
-2 files in both states are readable, so there is no downtime and no ordering requirement.
+- **Local and network filesystems:** `vault.rotate(path)` or `aegis rotate` rewrites the custody
+  record — 66 bytes for a local KEK — in place. A small journal makes a power cut mid-write
+  recoverable.
+- **Object stores** (S3, GCS, Azure Blob) cannot overwrite part of an object. Use
+  `vault.rewrap(src, dst)`: it streams a new copy with the record re-wrapped and the body copied
+  byte for byte, never decrypted.
+
+**Plan by file count, not by size.** Each file costs a few `fsync`s on a filesystem, or one object
+copy on an object store, whatever its size.
+
+During step 2, files in both states are readable, so there is no downtime and no ordering
+requirement. A reader that happens to race the rewrite of one file can fail once with
+`KeyMismatch` and succeed on retry.
+
+**After a suspected key leak**, rotating is not enough on its own. Backups, object versions and
+replicas made before rotation still open with the old key. Purge or re-seal them
+([security.md § 5.2](security.md#52-what-rotation-does-and-does-not-do)).
 
 Rotation does not re-encrypt file contents, so it does not help against an attacker who
 already extracted the data key of a specific file. It contains the compromise of a *KEK*,
-which is the realistic one.
+which is the realistic one; re-sealing contains the other.
 
 ## 9. CLI
 
 ```bash
-aegis keygen                                  # print a fresh base64 KEK
-aegis seal   in.pdf  out.aegis  --context user_id=42
-aegis unseal out.aegis out.pdf  --context user_id=42
-aegis inspect out.aegis                       # header only — never decrypts
-aegis rotate ./bucket --recursive
+aegis keygen --force > /run/secrets/aegis_master_key    # a fresh base64 KEK (TTY only without --force)
+aegis seal    in.pdf out.aegis --context user_id=42
+aegis unseal  out.aegis out.pdf --context user_id=42
+aegis inspect out.aegis                                  # header only — never decrypts
+aegis rotate  ./bucket --recursive
 ```
+
+**Keys.** The primary KEK comes from `--key-env NAME` (default `AEGIS_MASTER_KEY`) or
+`--key-file PATH`. Older KEKs come from `--previous-env NAME` and `--previous-file PATH`, which
+may repeat. Key bytes never appear on the command line or on a standard stream:
+
+```bash
+aegis seal   in.pdf out.aegis --caller-held --key-out user.key --context user_id=42   # user.key is created 0600
+aegis unseal out.aegis out.pdf --key-in user.key --context user_id=42
+```
+
+**Context.** `--context key=value` is always a `str`. The typed forms reproduce every other
+accepted type:
+
+| Option | Value type |
+|---|---|
+| `--context-int user_id=42` | `int` |
+| `--context-hex tenant=0a1b` | `bytes` |
+| `--context-bool archived=false` | `bool` |
+| `--context-null parent` | `None` |
+
+Mixing up `--context` and `--context-int` is the most likely cause of an `UnsealFailed` from
+the command line.
 
 `aegis inspect` is the fastest way to understand the format before writing any code:
 
 ```
 $ aegis inspect contract.aegis
-file        contract.aegis
-version     1
-suite       1  (AES-256-GCM / STREAM / 64 KiB)
-custody     KEK-wrapped
-kek_id      a3f1c0de9b7742e1…
-chunks      1 632
-plaintext   106 954 752 bytes  (overhead 26 206 B, 0.024 %)
+file              contract.aegis
+version           1
+suite             1  (AES-256-GCM / HKDF-SHA256 / STREAM / 64 KiB)
+custody           local KEK
+key_id            a3f1c0de9b7742e1…
+header            139 bytes
+size consistent   yes
+chunks            1 632               (from the file size — not authenticated)
+plaintext         106 954 752 bytes   (from the file size — not authenticated)
 ```
 
-`--context` takes `key=value` pairs, which are always `str`. To reproduce a context
-containing an `int` from the shell you need the CLI's typed form (`--context-int
-user_id=42`); mixing the two up is the most likely cause of an `UnsealFailed` from the
-command line.
+`inspect` never decrypts and needs no key. It reports sizes derived from the file's length and
+says when that length is impossible for a valid container. On standard input it counts the bytes
+to the end.
 
-Exit codes: `0` ok, `1` unseal failed, `2` usage, `3` format, `4` unknown KEK, `5`
-configuration.
+**`rotate --recursive`.** Caller-held files, non-Aegis files and files wrapped by a KMS each get
+one report line and do not fail the run; the CLI holds no `KeySource`, so rotate those from
+Python. Per-file errors are reported, the run continues, and a summary ends the output.
+`--fail-fast` stops at the first error.
 
-> **Pending ([Q13, Q14, Q15, Q24](architecture.md#16-open-questions)).** How the CLI receives
-> keys, which context types it can express beyond `str` and `int`, how `rotate --recursive`
-> treats mixed directories, and how `inspect` reports sizes are not yet specified.
+Exit codes: `0` ok, `1` unseal failed (including `KeyMismatch` and `TruncatedFile`), `2` usage,
+`3` format, `4` unknown KEK, `5` configuration. A recursive run exits with the code of its first
+failure.
 
-## 10. Django
+## 10. Django and other web frameworks
+
+The Django adapter is planned for V2 ([dev/v2-django.md](dev/v2-django.md)). Until then, the readers of
+§ 3.4 connect Aegis to any framework with constant memory. The examples below are sketches of
+that wiring; authorization is always yours.
+
+### 10.1 Storing an upload (Django)
 
 ```python
-from aegis.contrib.django import SealedFileField
+from django.core.files import File
+from django.core.files.storage import default_storage
 
-class Document(models.Model):
-    owner = models.ForeignKey(User, on_delete=models.CASCADE)
-    file  = SealedFileField(upload_to="docs/",
-                            context=lambda inst: {"user_id": inst.owner_id})
+def store(upload, doc):
+    context = {"document_id": str(doc.uuid), "revision": doc.revision}
+    sealed = vault.sealed(upload, context=context)
+    return default_storage.save(f"docs/{doc.uuid}.aegis", File(sealed))
 ```
 
-- Uploads are sealed as they stream to storage; nothing is buffered in memory.
-- Reading the field unseals transparently.
-- **KEK custody only.** Caller-held makes no sense in a field the server must read;
-  configuring it fails during `manage.py check`, not at runtime.
-- The context callable must only use fields that are populated **before** the file is
-  written — `inst.pk` is not available on a first save.
-- The context callable must be **stable for the life of the row**. The example above binds
-  to `owner_id`; if your product can transfer ownership, bind to something immutable
-  instead.
+Name stored objects with an opaque identifier, not the user's filename: storage keys and object
+metadata are not encrypted. Keep the original name in a model field if you need it.
 
-> **Pending ([Q16](architecture.md#16-open-questions)).** How the field receives its `Vault` is
-> not yet specified.
+### 10.2 Serving a file under WSGI (Django)
+
+```python
+from django.http import FileResponse
+from django.shortcuts import get_object_or_404
+
+def download(request, pk):
+    doc = get_object_or_404(Document, pk=pk, owner=request.user)      # authorization is yours
+    context = {"document_id": str(doc.uuid), "revision": doc.revision}
+    reader = vault.unsealed(default_storage.open(doc.blob_name, "rb"), context=context)
+    return FileResponse(reader, as_attachment=True, filename=doc.filename,
+                        content_type=doc.content_type)
+```
+
+When the storage file is seekable, `FileResponse` takes `Content-Length` from the reader's
+authenticated size, and a truncated file fails before the response starts.
+
+### 10.3 Serving a file under ASGI (Django)
+
+Under ASGI, Django consumes a *synchronous* response iterator completely before sending it — its
+documentation says so, and `FileResponse` is no exception. A 10 GB file would sit in memory.
+Give Django an asynchronous iterator that reads one chunk per thread hop:
+
+```python
+from asgiref.sync import sync_to_async
+from django.http import StreamingHttpResponse
+
+async def aiter_chunks(reader, size=65536):
+    read = sync_to_async(reader.read)
+    try:
+        while chunk := await read(size):
+            yield chunk
+    finally:
+        await sync_to_async(reader.close)()
+
+def open_plaintext(doc):
+    context = {"document_id": str(doc.uuid), "revision": doc.revision}
+    return vault.unsealed(default_storage.open(doc.blob_name, "rb"), context=context)
+
+async def download(request, pk):
+    doc = ...                                                            # look up and authorize
+    reader = await sync_to_async(open_plaintext)(doc)                    # storage I/O off the loop
+    response = StreamingHttpResponse(aiter_chunks(reader), content_type=doc.content_type)
+    if reader.size is not None:
+        response["Content-Length"] = str(reader.size)
+    return response
+```
+
+### 10.4 FastAPI and Starlette
+
+```python
+from fastapi.responses import StreamingResponse
+
+@app.get("/documents/{doc_id}")
+def download(doc_id: str):
+    doc = ...                                                            # look up and authorize
+    reader = vault.unsealed(open(doc.path, "rb"), context={"document_id": doc_id})
+    headers = {"Content-Length": str(reader.size)} if reader.size is not None else {}
+    return StreamingResponse(reader.chunks(), media_type=doc.content_type, headers=headers)
+```
+
+Starlette runs a synchronous iterator in its thread pool, one chunk at a time. Pass
+`reader.chunks()`, not the reader itself: iterating a binary file object yields *lines*, and a
+file without newlines is a single line.
+
+### 10.5 S3 with boto3
+
+```python
+s3.upload_fileobj(vault.sealed(open("video.mp4", "rb"), context=context), bucket, key)
+
+body = s3.get_object(Bucket=bucket, Key=key)["Body"]      # not seekable: a forward-only reader
+with vault.unsealed(body, context=context) as reader, open("video.mp4", "wb") as out:
+    shutil.copyfileobj(reader, out, 65536)
+```
+
+boto3 buffers multipart parts itself; memory stays bounded by its transfer settings, not by the
+file size. A forward-only download has the trust boundary of § 7 — prefer `unseal_to_path`
+when the destination is a file.
 
 ## 11. Pitfalls checklist
 
-- [ ] The KEK is in the environment or a secret manager — never in the repository, never in
-      `settings.py`, never in the same database as the ciphertext.
-- [ ] The context is built from immutable, reproducible fields.
+- [ ] The key comes from a mounted secret file, a secret manager or a KMS in production — never
+      from the repository, never from `settings.py`, never from the database that holds the
+      ciphertext.
+- [ ] The context is built from immutable, reproducible fields, and names the file, not only its
+      owner.
 - [ ] `context` values have the same **types** at seal and unseal time (`42` ≠ `"42"`).
 - [ ] Files are opened in **binary** mode (`"rb"` / `"wb"`). A `TextIOWrapper` will corrupt
       ciphertext.
-- [ ] `unseal_to_path` is used wherever the destination is a path.
-- [ ] Nothing acts on `unseal` output before the call returns.
+- [ ] `unseal_to_path` or a seekable `unsealed` reader is used wherever truncation would matter.
+- [ ] Nothing acts on forward-only `unseal` output before the call returns.
 - [ ] `receipt.key` is not logged, not stored server-side in caller-held mode, and not put
       in a URL.
 - [ ] The blob is stored as **binary** (`BinaryField`, `bytea`, a bucket object) — not
       base64 in a text column, which would undo the 0.024 % overhead.
+- [ ] Storage names are opaque identifiers, not user filenames.
 - [ ] A `previous=[...]` key list exists in the deployment before you need to rotate.
+- [ ] Under ASGI, responses stream through an asynchronous iterator (§ 10.3).
 
 ## 12. FAQ
 
@@ -338,17 +574,25 @@ searchability is what you actually need.
 **Can I search or index encrypted files?** No. Aegis is not searchable encryption. Index
 the metadata you keep in cleartext.
 
-**Can two servers share a vault?** Yes — they need the same KEK. That is the whole point of
-`EnvKey`.
+**Can I read part of a file without decrypting all of it?** Yes, when the source is seekable:
+`vault.unsealed(src, …)` supports `seek()` and decrypts only the chunks a read covers, after
+authenticating the last one.
 
-**Is the output deterministic?** No, and it must not be: the DEK, salt and nonce prefix are
-random per file. Sealing the same file twice yields different bytes. Compare plaintexts,
-not ciphertexts.
+**Can two servers share a vault?** Yes — they need the same KEK, or access to the same KMS key.
 
-**Does it work with S3 / GCS?** Yes. `seal` writes to any file-like object; multipart
-uploads work because the stream is forward-only.
+**Is the output deterministic?** No, and it must not be: the data key and the salt are random
+per file. Sealing the same file twice yields different bytes. Compare plaintexts, not
+ciphertexts.
 
-**How much larger are my files?** 94 bytes plus 16 bytes per 64 KiB — about 0.024 %.
+**Does it work with S3 / GCS?** Yes. Upload with `vault.sealed(...)` as the readable body, and
+download through `vault.unsealed(...)` (§ 10.5). Rotation there uses `vault.rewrap`, because an
+object cannot be edited in place (§ 8).
+
+**Does it work with a KMS?** Yes: implement `KeySource` (§ 5.2). The header stores whatever your
+KMS returns, up to 4 KiB.
+
+**How much larger are my files?** 16 bytes per 64 KiB — about 0.024 % — plus the header: 139
+bytes for a local KEK, 73 for caller-held, 91 plus your source's capacity for a KMS.
 
 **Why not just use Fernet?** It loads the whole file into memory, has no envelope
 encryption, no associated data, no rotation story, and base64-encodes its output (+33 %).

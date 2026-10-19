@@ -22,14 +22,15 @@ uv run mypy                          # strict, on src/aegis (stack.md § 6.3)
 uv run pytest --cov=aegis --cov-branch --cov-report=term-missing
 ```
 
-Without `uv`: `python -m venv .venv`, then `pip install -e ".[cli,django]" --group dev`
+Without `uv`: `python -m venv .venv`, then `pip install -e ".[cli]" --group dev`
 (pip 25.1+). That gives you the latest compatible tools rather than the locked ones, so when
 results differ, CI is the reference. Details: [stack.md § 6](stack.md#6-development-tooling).
 
 If you add or upgrade a dependency, commit the updated `uv.lock` in the same PR.
 
 CI runs exactly these. If they pass locally on Linux and fail in CI, it is almost always
-Windows: `os.replace`, `fsync` on a directory, or a file opened in text mode.
+Windows: `os.replace`, `fsync` on a directory, the missing `os.pwrite`, or a file opened in text
+mode.
 
 ## 2. Before you open a pull request
 
@@ -52,23 +53,26 @@ Windows: `os.replace`, `fsync` on a directory, or a file opened in text mode.
 3. **No blanket `except Exception`.** Catch what you can name.
 4. **No secret in any string.** Not in a `repr`, a log record, an exception message, or a
    test failure message. There is a test for this; do not weaken it.
-5. **`stream.py` stays small.** If your change makes it grow noticeably, something else
-   must move out. It is the module a reviewer must be able to audit in one sitting.
-6. **Randomness stays at the edges.** `format.py`, `context.py` and `stream.py` never call
-   `os.urandom` and never touch the environment
+5. **`stream.py` and `envelope.py` stay small.** If your change makes either grow noticeably,
+   something else must move out. They are the modules a reviewer must be able to audit in one
+   sitting.
+6. **Randomness stays in `vault.py`.** `format.py`, `context.py`, `envelope.py` and
+   `stream.py` never call `os.urandom` and never touch the environment, and no key source ever
+   generates a data key
    ([architecture.md § 4](architecture.md#4-the-purity-boundary-randomness-lives-at-the-edges)).
-7. **The adapters import only the public API.** If `aegis.contrib.django` or `aegis.cli`
-   needs a private name, the public API is incomplete — fix that instead.
+7. **The adapters import only the public API.** If `aegis.cli` — or, from V2,
+   `aegis.contrib.django` — needs a private name, the public API is incomplete — fix that
+   instead.
 
 ## 4. Tests a PR must carry
 
 - A test that fails before your change and passes after it. Paste both outputs in the PR
   description.
-- For anything touching `stream.py`, `format.py` or `context.py`: a **property** or a
-  **negative vector**, not only an example. Examples cover the case you thought of;
-  properties cover the ones you did not.
-- Coverage gates still met **per file**: 100 % branch on `stream.py` and `format.py`, 95 %
-  on `context.py` / `keys.py` / `rotate.py`, 90 % elsewhere.
+- For anything touching `stream.py`, `envelope.py`, `format.py` or `context.py`: a
+  **property** or a **negative vector**, not only an example. Examples cover the case you
+  thought of; properties cover the ones you did not.
+- Coverage gates still met **per file**: 100 % branch on `stream.py`, `envelope.py` and
+  `format.py`, 95 % on `context.py` / `keys.py` / `readers.py` / `rotate.py`, 90 % elsewhere.
 - Assert the specific exception class. `pytest.raises(AegisError)` is not a test.
 - Never assert on a message string; errors carry structured attributes for that.
 
@@ -80,8 +84,8 @@ Full strategy: [tests.md](tests.md).
   enforces which item of § 3, is in [stack.md § 6.3](stack.md#63-tool-configuration).
 - A `# noqa` or `# type: ignore` names its code and gives a reason. A bare one fails lint.
 - `mypy --strict` on `src/aegis/`. Public API fully annotated; `Protocol` for extension points.
-- Names come from the domain: `seal`/`unseal`, `dek`, `kek`, `wrapped_dek`, `nonce_prefix`,
-  `context`. Do not introduce a synonym for a term that already exists in
+- Names come from the domain: `seal`/`unseal`, `dek`, `kek`, `salt`, `commitment`,
+  `body_key`, `nonce_prefix`, `custody`, `key_id`, `wrapped_dek`, `context`. Do not introduce a synonym for a term that already exists in
   [file-format.md](file-format.md).
 - Comments explain **why**, not what. In `stream.py`, a comment explaining why a nonce is
   safe is worth more than the line it sits above.
@@ -107,13 +111,16 @@ If your PR changes behaviour, it changes documentation in the same PR:
 A reviewer of a crypto-touching PR is expected to answer, in writing:
 
 1. Can a nonce repeat under any interleaving of these changes?
-2. Is every byte written to disk either authenticated, or pinned to a constant?
-3. What does this do on a truncated, reordered or transplanted input?
-4. Can key material reach a string?
-5. Is the failure path as well tested as the success path?
+2. Is every data key still drawn by `vault.py`, and is the key commitment still checked before
+   the body?
+3. Is every byte written to disk either authenticated, or pinned by an exact rule?
+4. What does this do on a truncated, reordered or transplanted input?
+5. Can key material reach a string?
+6. Is the failure path as well tested as the success path?
 
-Anything touching `stream.py`, `format.py`, `keys.py` or the format needs **two**
-approvals, one of which must be a maintainer. Everything else needs one.
+Anything touching `stream.py`, `envelope.py`, `format.py`, `keys.py`, `readers.py`,
+`rotate.py` or the format needs **two** approvals, one of which must be a maintainer. Everything
+else needs one.
 
 ## 8. Commits and PRs
 
@@ -132,7 +139,7 @@ approvals, one of which must be a maintainer. Everything else needs one.
 4. Signed tag; CI publishes via PyPI trusted publishing (OIDC). No human holds a token.
 5. Verify `pip install aegis-voynan==<version>` on a clean machine and re-run the vectors.
 
-Pre-1.0, M8's public review of `stream.py` is a release blocker
+Pre-1.0, the public review of `stream.py`, `envelope.py` and the format is a release blocker
 ([roadmap.md](roadmap.md)).
 
 ## 10. Security issues
