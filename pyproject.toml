@@ -1,0 +1,125 @@
+[build-system]
+requires = ["hatchling==1.32.4"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aegis-voynan"
+version = "0.0.0"
+description = "A simple, secure and streaming-friendly file encryption library built on modern cryptography."
+readme = "README.md"
+requires-python = ">=3.11"          # ADR-0023
+license = "MIT"
+authors = [{ name = "Kaio Vinícios" }]
+keywords = ["encryption", "aes-gcm", "envelope-encryption", "streaming", "kms"]
+classifiers = [
+  "Development Status :: 1 - Planning",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Security :: Cryptography",
+  "Typing :: Typed",
+]
+dependencies = ["cryptography>=44.0"]
+
+[project.optional-dependencies]      # published: what users can ask for
+cli = ["click>=8.1"]                 # [django] arrives with the V2 adapter (ADR-0034)
+
+[project.urls]
+Homepage = "https://github.com/Voynan/aegis"
+Documentation = "https://github.com/Voynan/aegis/tree/main/docs"
+Issues = "https://github.com/Voynan/aegis/issues"
+Security = "https://github.com/Voynan/aegis/security/policy"
+
+# [project.scripts] arrives at M6 with aegis/cli/: shipped earlier, it would install a broken
+# `aegis` command.
+
+[dependency-groups]                  # not published: exact versions live in uv.lock
+dev = [
+  "ruff>=0.16.7", "mypy>=2.3.1",
+  "pytest>=9.1.1", "pytest-cov>=7.1.0", "hypothesis>=6.168.0",
+  "pytest-benchmark>=5.3.0",
+  "mutmut>=3.8.0", "pre-commit>=4.6.2",
+  "pip-audit>=2.9", "zizmor>=1.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aegis"]             # installed as `aegis` (ADR-0025)
+
+[tool.hatch.build.targets.sdist]     # an allowlist: a local build never ships untracked files
+only-include = ["src", "tests", "docs", "LICENSE", "README.md", "SECURITY.md", "pyproject.toml"]
+
+[tool.uv]
+required-version = ">=0.12"
+
+# --- Tool configuration: docs/stack.md § 6.3 -------------------------------------------------
+
+[tool.ruff.format]
+docstring-code-format = true           # examples in docstrings are formatted too
+exclude = ["*.md"]                     # docs' code blocks are aligned by hand, for reading
+
+[tool.ruff.lint]
+select = [
+  "E", "W", "F",   # pycodestyle, pyflakes
+  "I",             # import order
+  "UP",            # modern syntax for the requires-python floor
+  "B",             # bugbear: likely bugs
+  "BLE",           # blind except                      — contributing.md § 3, rule 3
+  "S",             # bandit: `random`, `pickle`, `assert`, hardcoded secrets
+  "T20",           # no `print` in the library
+  "TID",           # banned APIs, below                — contributing.md § 3, rules 6-7
+  "D",             # docstrings on the public API      — contributing.md § 5
+  "C90",           # complexity ceiling                — "stream.py stays small"
+  "N", "C4", "SIM", "PIE", "RET", "PERF", "PT", "PGH", "RUF",
+]
+ignore = [
+  "W191", "D206", "D300",               # conflict with `ruff format`
+  "D105", "D107",                       # dunder methods and __init__: the class docstring covers them
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"                   # `Raises:` names the exception the caller should expect
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"os.urandom".msg = "Randomness enters only in vault.py (architecture.md § 4, ADR-0026)."
+"os.environ".msg = "The environment is read only in keys.py (architecture.md § 4)."
+"os.getenv".msg  = "The environment is read only in keys.py (architecture.md § 4)."
+"click".msg      = "`import aegis` must never import click (ADR-0021). Only aegis.cli may."
+
+[tool.ruff.lint.per-file-ignores]
+"src/aegis/keys.py"   = ["TID251"]      # the edges: the environment
+"src/aegis/vault.py"  = ["TID251"]      # the edges: randomness
+"src/aegis/cli/**"    = ["TID251"]
+"tests/**"            = ["S101", "D", "TID251"]
+
+[tool.mypy]
+files = ["src/aegis"]
+strict = true
+warn_unreachable = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool", "possibly-undefined"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--import-mode=importlib", "--strict-markers", "--strict-config", "-ra"]
+xfail_strict = true
+filterwarnings = ["error"]              # a deprecation in `cryptography` fails the suite, not a user
+markers = ["slow: the 512 MB memory invariants (tests.md)"]
+
+[tool.coverage.run]
+branch = true
+source_pkgs = ["aegis"]                 # the package, wherever it is installed from
+relative_files = true                   # data files from every matrix cell combine (M0 spec, D5)
+
+[tool.coverage.paths]
+source = ["src/aegis", "*/site-packages/aegis", "*\\site-packages\\aegis"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = ["if TYPE_CHECKING:", "^\\s*\\.\\.\\.$"]   # Protocol bodies

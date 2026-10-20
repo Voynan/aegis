@@ -1,7 +1,8 @@
 # Stack
 
 Every dependency and tool, the version policy for each, and why it was chosen over the
-alternatives. Versions named here are the floor or the pin **as of 2026-09-14**.
+alternatives. Floors are as of 2026-09-14; the versions locked in `uv.lock` are those of
+**2026-10-19**, when M0 created it.
 
 ---
 
@@ -140,20 +141,28 @@ latest release on the newest ([dev/v2-django.md](dev/v2-django.md)).
   part of the published metadata: `pip install "aegis-voynan[dev]"` would install our
   linters into a user's environment. A group never leaves the repository.
 - **Wheel** `py3-none-any`. **sdist** includes `tests/vectors/`, so downstream packagers can
-  run the frozen vectors.
+  run the frozen vectors. Its contents are an allowlist (`only-include`), not "whatever is not
+  ignored": Hatchling reads only the root `.gitignore` and includes untracked files, so a
+  local build could otherwise ship a stray file.
 - **`uv.lock` is committed.** It governs development and CI only; it is not published and
   does not constrain users.
 
 ```toml
 [build-system]
-requires = ["hatchling==1.32.0"]
+requires = ["hatchling==1.32.4"]
 build-backend = "hatchling.build"
 
 [project]
 name = "aegis-voynan"
 version = "0.0.0"
+description = "A simple, secure and streaming-friendly file encryption library built on modern cryptography."
+readme = "README.md"                 # the PyPI page
 requires-python = ">=3.11"          # ADR-0023
 license = "MIT"
+authors = [{ name = "Kaio Vinícios" }]
+keywords = ["encryption", "aes-gcm", "envelope-encryption", "streaming", "kms"]
+classifiers = [ … ]                  # Planning; Python 3.11–3.14; Security :: Cryptography; Typed
+                                     # no license classifier: `license` is an SPDX expression (PEP 639)
 dependencies = ["cryptography>=44.0"]
 
 [project.optional-dependencies]      # published: what users can ask for
@@ -168,11 +177,16 @@ dev = [
   "pip-audit>=2.9", "zizmor>=1.0",
 ]
 
-[project.scripts]
+[project.urls]                       # Homepage, Documentation, Issues, Security
+
+[project.scripts]                    # M6, with aegis/cli/ — earlier, it would install a broken command
 aegis = "aegis.cli.__main__:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aegis"]             # installed as `aegis` (ADR-0025)
+
+[tool.hatch.build.targets.sdist]     # an allowlist: a local build never ships untracked files
+only-include = ["src", "tests", "docs", "LICENSE", "README.md", "SECURITY.md", "pyproject.toml"]
 
 [tool.uv]
 required-version = ">=0.12"
@@ -210,19 +224,19 @@ compatible tools instead of the locked ones, so CI remains the reference.
 
 ### 6.2 Tools
 
-| Tool | Locked at (2026-09-14) | Used for |
+| Tool | Locked at (2026-10-19) | Used for |
 |---|---|---|
-| `uv` | 0.12.13 | environments, lockfile, Python installs, `uv build` |
-| `ruff` | 0.16.7 | lint and format — no style debate ([contributing.md § 5](contributing.md#5-code-style)) |
-| `mypy` | 2.3.1 | `--strict` on `src/aegis/` |
+| `uv` | 0.13.2 in CI (`setup-uv`); `required-version >= 0.12` | environments, lockfile, Python installs, `uv build` |
+| `ruff` | 0.17.1 | lint and format — no style debate ([contributing.md § 5](contributing.md#5-code-style)) |
+| `mypy` | 2.4.0 | `--strict` on `src/aegis/` |
 | `pytest` | 9.1.1 | the suite |
 | `pytest-cov` | 7.1.0 | per-file coverage gates ([tests.md § 8](tests.md#8-coverage)) |
-| `hypothesis` | 6.168.0 | round-trip and adversarial properties |
+| `hypothesis` | 6.170.4 | round-trip and adversarial properties |
 | `pytest-benchmark` | 5.3.0 | the benchmark suite ([performance.md](performance.md)) |
 | `mutmut` | 3.8.0 | mutation testing of `stream.py`, `envelope.py`, `format.py`, `context.py` |
-| `pre-commit` | 4.6.2 | local hooks: `ruff check`, `ruff format`, `uv lock --check` |
-| `pip-audit` | locked at M0 | known vulnerabilities in the locked dependency tree |
-| `zizmor` | locked at M0 | security lint of `.github/workflows/` (injection, unpinned actions, token scope) |
+| `pre-commit` | 4.7.0 | local hooks: `ruff check`, `ruff format`, `uv lock --check` |
+| `pip-audit` | 2.10.1 | known vulnerabilities in the locked dependency tree |
+| `zizmor` | 1.31.1 | security lint of `.github/workflows/` (injection, unpinned actions, token scope) |
 
 - **Updates:** Dependabot opens PRs for `uv.lock` and for GitHub Actions.
 - `mypy` runs in CI, not in `pre-commit`, to keep commits fast.
@@ -244,6 +258,7 @@ the floor's syntax and moves with it when ADR-0023 is decided. The line length i
 ```toml
 [tool.ruff.format]
 docstring-code-format = true           # examples in docstrings are formatted too
+exclude = ["*.md"]                     # docs' code blocks are aligned by hand, for reading
 
 [tool.ruff.lint]
 select = [
@@ -327,6 +342,10 @@ markers = ["slow: the 512 MB memory invariants (tests.md)"]
 [tool.coverage.run]
 branch = true
 source_pkgs = ["aegis"]                 # the package, wherever it is installed from
+relative_files = true                   # data files from every matrix cell combine
+
+[tool.coverage.paths]
+source = ["src/aegis", "*/site-packages/aegis", "*\\site-packages\\aegis"]
 
 [tool.coverage.report]
 show_missing = true
@@ -338,6 +357,11 @@ exclude_also = ["if TYPE_CHECKING:", "^\\s*\\.\\.\\.$"]   # Protocol bodies
 files averages them. The per-file gates of [tests.md § 8](tests.md#8-coverage) are therefore
 applied by `tools/coverage_gates.py`: a stdlib-only script that reads `coverage json` and
 checks each file against its threshold. CI runs it after the suite.
+
+Coverage is measured on every matrix cell and combined before the gates run, because some
+branches exist on one platform only: the `seek` + `write` fallback on Windows, the directory
+`fsync` on POSIX. `relative_files` and `[tool.coverage.paths]` are what let the cells' data
+files combine.
 
 ## 7. CI/CD
 
