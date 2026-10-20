@@ -23,8 +23,8 @@ git-ignored.
   diagrams, this checklist, and the spec-and-plan workflow in the documents.
 - [ ] 👤 **Q19 — request public review of `file-format.md` now** (cryptography mailing lists,
       `r/crypto`, the `age`/Tink communities), before any code depends on it.
-- [ ] 👤 **Q18 — reserve `aegis-voynan`:** pending trusted publisher, then a `0.0.0` placeholder
-      through `release.yml`.
+- [ ] 👤 **Q18 — reserve `aegis-voynan`:** pending trusted publisher registered with `release.yml` / `pypi` (2026-10-19);
+      the `0.0.0` placeholder waits for `release.yml` and the `pypi` environment, both in M0.
 - [ ] Start M0 with its spec and plan — `superpowers:brainstorming`, then
       `superpowers:writing-plans` — and nothing else first. Nothing else blocks it.
 
@@ -113,8 +113,9 @@ Every milestone opens with the same first task, and its code is written test-fir
 
 **PyPI** 👤
 
-- [ ] Pending trusted publisher for `aegis-voynan`: repository `Voynan/aegis`, workflow
-  `release.yml`, environment `pypi`.
+- [x] Pending trusted publisher for `aegis-voynan`: repository `Voynan/aegis`, workflow
+  `release.yml`, environment `pypi` — 2026-10-19.
+- [ ] The `pypi` environment in the repository settings, with a required reviewer.
 - [ ] Publish the `0.0.0` placeholder through it (Q18).
 
 **CI** — [stack.md § 7](../stack.md#7-cicd)
