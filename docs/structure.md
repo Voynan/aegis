@@ -158,7 +158,6 @@ Generated locally or in CI, and listed in `.gitignore`:
 | `.hypothesis/` | Hypothesis — failures are pinned as `@example(...)` instead ([ADR-0037](decisions.md#adr-0037-smaller-resolutions), Q17) |
 | `docs/dev/notes.md`, `docs/dev/diary/` | personal notes — `v1-todo.md` and `v2-django.md` beside them are committed |
 | `docs/dev/superpowers/` | the milestone specs and plans, written with superpowers ([ADR-0039](decisions.md#adr-0039-milestone-specs-and-plans-are-local-working-files)) |
+| `.DS_Store` | macOS Finder |
 
-The committed `.gitignore` is still a Ruby template, with the two `docs/dev/` entries at its
-top. Replacing the template with this list is an M0 task
-([roadmap.md § M0](roadmap.md#m0--repository-scaffolding)).
+`.gitignore` holds exactly this list, in this order.

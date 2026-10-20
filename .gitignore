@@ -1,59 +1,41 @@
-docs/dev/diary/
-docs/dev/notes.md
+# Never committed — docs/structure.md § 5 is the source of this list.
 
-*.gem
-*.rbc
-/.config
-/coverage/
-/InstalledFiles
-/pkg/
-/spec/reports/
-/spec/examples.txt
-/test/tmp/
-/test/version_tmp/
-/tmp/
+# uv sync
+.venv/
 
-# Used by dotenv library to load environment variables.
-# .env
+# CPython
+__pycache__/
+*.py[cod]
 
-# Ignore Byebug command history file.
-.byebug_history
-
-## Specific to RubyMotion:
-.dat*
-.repl_history
+# uv build
 build/
-*.bridgesupport
-build-iPhoneOS/
-build-iPhoneSimulator/
+dist/
+*.egg-info/
 
-## Specific to RubyMotion (use of CocoaPods):
-#
-# We recommend against adding the Pods directory to your .gitignore. However
-# you should judge for yourself, the pros and cons are mentioned at:
-# https://guides.cocoapods.org/using/using-cocoapods.html#should-i-check-the-pods-directory-into-source-control
-#
-# vendor/Pods/
+# the tools
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-## Documentation cache and generated files:
-/.yardoc/
-/_yardoc/
-/doc/
-/rdoc/
+# coverage, tools/coverage_gates.py
+.coverage
+.coverage.*
+coverage.json
+htmlcov/
 
-## Environment normalization:
-/.bundle/
-/vendor/bundle
-/lib/bundler/man/
+# pytest-benchmark
+.benchmarks/
 
-# for a library or gem, you might want to ignore these files since the code is
-# intended to run in multiple environments; otherwise, check them in:
-# Gemfile.lock
-# .ruby-version
-# .ruby-gemset
+# mutmut
+mutants/
 
-# unless supporting rvm < 1.11.0 or doing something fancy, ignore this:
-.rvmrc
+# Hypothesis — failures are pinned as @example(...) instead (ADR-0037, Q17)
+.hypothesis/
 
-# Used by RuboCop. Remote config files pulled in from inherit_from directive.
-# .rubocop-https?--*
+# personal notes, and the milestone specs and plans (ADR-0039)
+docs/dev/notes.md
+docs/dev/diary/
+docs/dev/superpowers/
+
+# macOS Finder
+.DS_Store
