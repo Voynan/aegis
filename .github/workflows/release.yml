@@ -1,0 +1,150 @@
+# Publishes aegis-voynan to PyPI from a signed tag (docs/stack.md § 7, contributing.md § 9).
+# Only `publish` can mint an OIDC token, and the `pypi` environment requires a reviewer.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+concurrency:
+  group: release # one release at a time, and never cancel one halfway
+  cancel-in-progress: false
+
+jobs:
+  verify-tag:
+    name: Verify the tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.2"
+          enable-cache: false
+      - name: Annotated, signed by a key GitHub verifies, and equal to the version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          failures=()
+          ref=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME")
+          if [ "$(jq -r '.object.type' <<<"$ref")" != "tag" ]; then
+            failures+=("lightweight tag: $GITHUB_REF_NAME is not an annotated tag")
+          else
+            sha=$(jq -r '.object.sha' <<<"$ref")
+            verification=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$sha" --jq '.verification')
+            if [ "$(jq -r '.verified' <<<"$verification")" != "true" ]; then
+              failures+=("unverified signature: $(jq -r '.reason' <<<"$verification")")
+            fi
+          fi
+          version="v$(uv version --short)"
+          if [ "$version" != "$GITHUB_REF_NAME" ]; then
+            failures+=("version mismatch: tag $GITHUB_REF_NAME, pyproject.toml $version")
+          fi
+          if [ "${#failures[@]}" -gt 0 ]; then
+            printf '::error::%s\n' "${failures[@]}"
+            exit 1
+          fi
+          echo "$GITHUB_REF_NAME: annotated, verified, matches pyproject.toml"
+
+  audit:
+    name: Audit the locked dependencies
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.2"
+          enable-cache: false
+      - name: Export the whole lock, with hashes
+        run: |
+          uv export --frozen --all-extras --all-groups --no-emit-project \
+            --format requirements-txt -o "$RUNNER_TEMP/locked.txt"
+          test -s "$RUNNER_TEMP/locked.txt"
+      - name: pip-audit
+        run: uv run --frozen pip-audit --strict --disable-pip --require-hashes -r "$RUNNER_TEMP/locked.txt"
+
+  build:
+    name: Build
+    needs: [verify-tag, audit]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.2"
+          enable-cache: false
+      - run: uv build
+      - name: The wheel holds the package and its metadata, nothing else
+        run: |
+          stray=$(unzip -Z1 dist/*.whl | grep -vE '^(aegis/|aegis_voynan-[^/]+\.dist-info/)' || true)
+          if [ -n "$stray" ]; then
+            printf '::error::unexpected file in the wheel: %s\n' $stray
+            exit 1
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  vectors:
+    name: Frozen vectors against the built wheel
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Look for the frozen vectors
+        id: probe
+        run: |
+          if [ -f tests/vectors/v1.json ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "no frozen vectors yet (M4)"
+          fi
+      - if: steps.probe.outputs.present == 'true'
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.2"
+          enable-cache: false
+      - if: steps.probe.outputs.present == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - if: steps.probe.outputs.present == 'true'
+        run: uv run --isolated --no-project --with dist/*.whl --with pytest pytest tests/vectors
+
+  publish:
+    name: Publish to PyPI
+    needs: [build, vectors]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/aegis-voynan/
+    permissions:
+      id-token: write # trusted publishing and PEP 740 attestations
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2

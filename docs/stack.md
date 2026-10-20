@@ -373,7 +373,7 @@ locked `uv` version, then `uv sync --locked`, which fails if `uv.lock` is stale.
 | `ci.yml` | every PR and push to `main` | `ruff check --output-format=github`, `ruff format --check`, `mypy`, `zizmor`, the full suite on the matrix, the floor job (`--resolution lowest-direct`), per-file coverage gates, a guard that fails if `tests/vectors/` changed |
 | `nightly.yml` | daily | high-`max_examples` Hypothesis, `mutmut`, `pip-audit` on the locked tree (a vulnerability appears without a code change) |
 | `bench.yml` | weekly, release tags, manual | the benchmark suite on the reference runners ([performance.md § 5](performance.md#5-how-it-is-measured)) |
-| `release.yml` | signed tag | `pip-audit` → `uv build` → provenance attestations → publish through trusted publishing |
+| `release.yml` | `v*` tag | tag check (annotated, signature verified by GitHub, equal to `v` + the `pyproject.toml` version) and `pip-audit` over the whole lock → `uv build`, and a check that the wheel holds only `aegis/` and its metadata → frozen vectors against the built wheel (from M4) → publish through trusted publishing, with attestations, behind the `pypi` environment's reviewer |
 
 - Matrix: [tests.md § 9](tests.md#9-ci).
 - Third-party actions are pinned by **commit SHA**, not by tag.
