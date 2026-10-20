@@ -256,3 +256,9 @@ those upstream) and findings that require an already-compromised host.
 **Not audited.** No third-party review has taken place. Before 1.0, § 4.1's public review is a
 release blocker; that is a review, not an audit, and the README will say so in those words. If
 you need an audited library today, `age` and Tink are the honest recommendations.
+
+**One maintainer.** Aegis has a single maintainer, so changes to the cryptographic code are
+merged without a second person's approval. They carry the author's written answers to the review
+questions of [contributing.md § 7](contributing.md#7-reviewing). The construction and the format
+are read by someone independent before the format freezes and before 1.0
+([ADR-0038](decisions.md#adr-0038-one-maintainer-crypto-review-is-written-not-enforced-at-merge)).

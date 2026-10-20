@@ -62,6 +62,8 @@ The ones that shape the code, in one place:
   and all code is written test-first
   ([milestone-specs-and-plans.md](../../.claude/rules/milestone-specs-and-plans.md),
   [tdd-and-testing.md](../../.claude/rules/tdd-and-testing.md)).
+- **Review:** one maintainer, so no required approvals. Crypto PRs answer the six questions of
+  contributing.md § 7 in writing, and the M2 and M4 reads are done by someone else (ADR-0038).
 - **Project:** Python 3.11–3.14 (ADR-0023), `click` (ADR-0021), Hatchling (ADR-0022),
   `.hypothesis/` ignored with failures pinned as `@example` (Q17). Plans live in `docs/dev/`
   and are committed; `diagrams.md` is kept in step with the documents (contributing.md § 6).
@@ -88,8 +90,8 @@ Every milestone opens with the same first task, and its code is written test-fir
 - [ ] Turn on **private vulnerability reporting** in the repository settings.
 - [ ] Ruleset on `main`: required status checks, linear history, no force pushes.
 - [ ] `CODEOWNERS` for `src/aegis/stream.py`, `envelope.py`, `format.py`, `keys.py`,
-  `readers.py`, `rotate.py`, `docs/file-format.md` and `tests/vectors/`; two approvals on those
-  paths (a ruleset or a review-count check).
+  `readers.py`, `rotate.py`, `docs/file-format.md` and `tests/vectors/`. No required approvals
+  while there is one maintainer (ADR-0038).
 - [ ] Protect `v*` tags and register the maintainers' signing keys.
 - [ ] Dependabot for `uv` and `github-actions`.
 
@@ -276,7 +278,7 @@ See [v2-django.md](v2-django.md).
 | Vectors are read-only | CI change guard; generator never run in CI |
 | Per-file coverage | `tools/coverage_gates.py` |
 | `stream.py` and `envelope.py` fit on one screen | review; `ruff` `C90` |
-| Two approvals on crypto paths | `CODEOWNERS` plus a ruleset or a review-count check |
+| Crypto-path PRs answer the six review questions; M2 and M4 reads by someone other than the author | review; the PR description ([ADR-0038](../decisions.md#adr-0038-one-maintainer-crypto-review-is-written-not-enforced-at-merge)) |
 | Third-party actions pinned by SHA | `zizmor` |
 | No known-vulnerable dependency in the lock | `pip-audit` nightly and before every release |
 | The diagrams never contradict the documents | review — [contributing.md § 6](../contributing.md#6-documentation-is-part-of-the-change) |

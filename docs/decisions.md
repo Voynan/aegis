@@ -51,6 +51,7 @@ open question of [architecture.md § 16](architecture.md#16-open-questions).
 | [0035](#adr-0035-rotation-write-path-torn-write-journal-public-calls-recursive-runs) | Rotation: write path, torn-write journal, public calls, recursive runs | accepted |
 | [0036](#adr-0036-inspect-and-the-cli-contract) | `inspect` and the CLI contract | accepted |
 | [0037](#adr-0037-smaller-resolutions) | Smaller resolutions | accepted |
+| [0038](#adr-0038-one-maintainer-crypto-review-is-written-not-enforced-at-merge) | One maintainer: crypto review is written, not enforced at merge | accepted |
 
 ---
 
@@ -1079,6 +1080,57 @@ exits 1 like every `UnsealFailed`.
 | Q23 | Every unseal entry point canonicalizes `context` and checks the call's custody arguments before reading a byte. |
 | Q26 | Custody mismatches raise before any decryption. `UsageError`: a caller-held file opened by a server-custody vault, a server-custody file opened by `CallerHeld()`, `key=` passed to a server-custody vault, `CallerHeld()` without `key=`. `UnknownKek`, with `file_custody` set: a local-KEK file opened through a `KeySource`, or the reverse. |
 | Q46 | `seal_bytes` on a `CallerHeld()` vault raises `UsageError`: it returns only the blob, so the key would be lost. Caller-held sealing goes through `seal` or `sealed`, whose `Receipt` carries the key. |
+
+## ADR-0038: One maintainer: crypto review is written, not enforced at merge
+
+**Status:** accepted (2026-10-19) — replaces the two-approval rule of
+[contributing.md § 7](contributing.md#7-reviewing) for as long as the project has one maintainer
+
+**Context.** [contributing.md § 7](contributing.md#7-reviewing) required two approvals, one from a
+maintainer, on every change to `stream.py`, `envelope.py`, `format.py`, `keys.py`, `readers.py`,
+`rotate.py` or the format. M0 was to enforce this with `CODEOWNERS` and a ruleset. GitHub counts
+an approval only from someone with write access, and never counts the author's own. A pull
+request by the maintainer would therefore need two other people with write access. Aegis is a
+solo project. An academic advisor validates its direction but does not review pull requests.
+Enforced as written, the rule would block every crypto change from M1 on.
+
+**Decision.** While Aegis has one maintainer:
+
+- The `main` ruleset requires a pull request, the `ci-ok` status check, linear history, and no
+  force pushes or deletion. It requires **no approvals**.
+- A pull request that touches a crypto path carries, in its description, the author's written
+  answers to the six questions of [contributing.md § 7](contributing.md#7-reviewing).
+- The independent reads that milestones already require stay required, done by someone other
+  than the author and named in the pull request. These are the M2 line-by-line read of
+  `stream.py` and `envelope.py` against `file-format.md`, and the M4 hand-check of the vectors.
+  The reader is a public reviewer recruited through Q19, or anyone else willing to do it.
+- The public review of [security.md § 4.1](security.md#41-the-accepted-risk) (Q19, and the M8
+  final pass) remains a release blocker. It is the project's second pair of eyes.
+- `CODEOWNERS` is still committed, naming the maintainer on the crypto paths. When a second
+  person with write access joins, the ruleset gains required approvals and code-owner review on
+  those paths, and a new ADR supersedes this one.
+- [security.md § 10](security.md#10-audit-status) says, in plain words, that crypto changes are
+  merged without a second approval.
+
+**Why.** A required review that can never be satisfied is not a control. It gets bypassed, and a
+bypass that becomes routine hides the one that matters. Written answers to fixed questions force
+the author to check what a reviewer would check. Independent reads at the points where the format
+and the construction are fixed put a second person where a mistake would be permanent. Saying so
+in `security.md` keeps the guarantee honest.
+
+**Consequences.** A crypto bug can reach `main` with only its author having read it. The
+frozen vectors, the adversarial suite, the 100 % branch gates and the pre-freeze public review
+are what catch it before a release. M2 and M4 cannot close until someone other than the author
+has done their read.
+
+**Rejected.**
+- *Keep two approvals.* This needs two other people with write access, and the project has none.
+- *Count the author as one of two.* This needs one other person with write access, and there is
+  none either.
+- *Require approvals and bypass them as admin.* This turns the rule into a formality that is
+  broken on every crypto pull request.
+- *Give write access to a reviewer who does not review.* This would satisfy the check without
+  doing the review.
 
 ---
 

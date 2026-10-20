@@ -125,9 +125,14 @@ A reviewer of a crypto-touching PR is expected to answer, in writing:
 5. Can key material reach a string?
 6. Is the failure path as well tested as the success path?
 
-Anything touching `stream.py`, `envelope.py`, `format.py`, `keys.py`, `readers.py`,
-`rotate.py` or the format needs **two** approvals, one of which must be a maintainer. Everything
-else needs one.
+While Aegis has one maintainer
+([ADR-0038](decisions.md#adr-0038-one-maintainer-crypto-review-is-written-not-enforced-at-merge)),
+no approval is required to merge. Instead, a pull request that touches `stream.py`,
+`envelope.py`, `format.py`, `keys.py`, `readers.py`, `rotate.py` or the format answers these
+six questions in its description. The independent reads of M2 and M4 are done by someone other
+than the author, who is named in the pull request. Once a second person has write access, those
+paths will need two approvals, one of them from a maintainer, enforced through `CODEOWNERS` and
+the `main` ruleset.
 
 ## 8. Commits and PRs
 

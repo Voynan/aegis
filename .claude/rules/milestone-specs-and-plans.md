@@ -26,8 +26,8 @@ is available.
      `docs/dev/plans/YYYY-MM-DD-mN-<k>-<topic>.md`.
    - A small milestone gets one plan. It gets several when it spans modules reviewed separately or
      carries more than about ten tasks. Work on a crypto module (`stream.py`, `envelope.py`,
-     `format.py`) always gets a plan of its own, because it needs two approvals
-     ([docs/contributing.md § 7](../../docs/contributing.md#7-reviewing)).
+     `format.py`) always gets a plan of its own, because its pull request answers the review
+     questions of [docs/contributing.md § 7](../../docs/contributing.md#7-reviewing) on its own.
    - Each task names the test to write first, the command that must fail and why, the minimal
      implementation, and the command that must then pass.
    - **Gate:** the author approves each plan.
