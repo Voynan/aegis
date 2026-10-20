@@ -37,9 +37,10 @@ mode.
 - **Discuss format-touching changes first.** Anything that changes a byte on disk is a new
   format version, not a patch. Open an issue and expect it to become an
   [ADR](decisions.md).
-- **Start a milestone with a spec and a plan.** Each milestone gets an approved spec in
-  `docs/dev/specs/` and one or more approved plans in `docs/dev/plans/` before any code is
-  written ([.claude/rules/milestone-specs-and-plans.md](../.claude/rules/milestone-specs-and-plans.md)).
+- **Start a milestone with a spec and a plan.** Each milestone gets an approved spec and one or
+  more approved plans, in the git-ignored `docs/dev/superpowers/`, before any code is written
+  ([.claude/rules/milestone-specs-and-plans.md](../.claude/rules/milestone-specs-and-plans.md),
+  [ADR-0039](decisions.md#adr-0039-milestone-specs-and-plans-are-local-working-files)).
   The rules in `.claude/rules/` bind people and agents alike.
 - **One concern per PR.** A refactor and a behaviour change in the same diff cannot be
   reviewed for security.

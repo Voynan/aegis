@@ -6,8 +6,9 @@ new [diagrams.md](../diagrams.md), the move of the plans into `docs/dev/`, and t
 in [`.claude/rules/`](../../.claude/rules/).
 
 **Not normative.** When this file and a document disagree, the document wins and this file gets
-fixed. It is committed, like [v2-django.md](v2-django.md) beside it; only `docs/dev/notes.md`
-and `docs/dev/diary/` are git-ignored.
+fixed. It is committed, like [v2-django.md](v2-django.md) beside it; `docs/dev/notes.md`,
+`docs/dev/diary/` and `docs/dev/superpowers/` (the milestone specs and plans, ADR-0039) are
+git-ignored.
 
 **Legend** — 🔒 must hold before the M4 format freeze · 👤 an action for a person, not code
 
@@ -65,8 +66,8 @@ The ones that shape the code, in one place:
 - **Review:** one maintainer, so no required approvals. Crypto PRs answer the six questions of
   contributing.md § 7 in writing, and the M2 and M4 reads are done by someone else (ADR-0038).
 - **Project:** Python 3.11–3.14 (ADR-0023), `click` (ADR-0021), Hatchling (ADR-0022),
-  `.hypothesis/` ignored with failures pinned as `@example` (Q17). Plans live in `docs/dev/`
-  and are committed; `diagrams.md` is kept in step with the documents (contributing.md § 6).
+  `.hypothesis/` ignored with failures pinned as `@example` (Q17). Milestone specs and
+  plans live in `docs/dev/superpowers/`, git-ignored (ADR-0039); `diagrams.md` is kept in step with the documents (contributing.md § 6).
 
 ## 4. Milestones
 
@@ -74,7 +75,7 @@ Every milestone opens with the same first task, and its code is written test-fir
 
 ### M0 — Repository scaffolding
 
-- [ ] Spec in `docs/dev/specs/` and plan(s) in `docs/dev/plans/`, written with superpowers and
+- [ ] Spec and plan(s) in `docs/dev/superpowers/` (git-ignored, ADR-0039), written with superpowers and
   approved before any other task.
 
 **Repository**
@@ -135,7 +136,7 @@ Every milestone opens with the same first task, and its code is written test-fir
 
 ### M1 — The pure core: `errors`, `format`, `context`
 
-- [ ] Spec in `docs/dev/specs/` and plan(s) in `docs/dev/plans/`, written with superpowers and
+- [ ] Spec and plan(s) in `docs/dev/superpowers/` (git-ignored, ADR-0039), written with superpowers and
   approved before any other task.
 - [ ] `errors.py`: the hierarchy of [architecture.md § 9](../architecture.md#9-error-model),
   `KeyMismatch` and `TruncatedFile` under `UnsealFailed`; structured attributes
@@ -153,7 +154,7 @@ Every milestone opens with the same first task, and its code is written test-fir
 
 ### M2 — `envelope.py` and `stream.py`
 
-- [ ] Spec in `docs/dev/specs/` and plan(s) in `docs/dev/plans/`, written with superpowers and
+- [ ] Spec and plan(s) in `docs/dev/superpowers/` (git-ignored, ADR-0039), written with superpowers and
   approved before any other task.
 - [ ] `envelope.py`: `schedule(dek, salt)` → body key, nonce prefix, commitment; `kek_id`;
   `wrap_local` / `unwrap_local` (zero nonce, AAD = custody AAD ‖ `kek_id`).
@@ -170,7 +171,7 @@ Every milestone opens with the same first task, and its code is written test-fir
 
 ### M3 — `keys.py`, `vault.py`, `readers.py`, `info.py`
 
-- [ ] Spec in `docs/dev/specs/` and plan(s) in `docs/dev/plans/`, written with superpowers and
+- [ ] Spec and plan(s) in `docs/dev/superpowers/` (git-ignored, ADR-0039), written with superpowers and
   approved before any other task.
 - [ ] `keys.py`: `EnvKey`, `FileKey` (one trailing `\n` / `\r\n` tolerated), `BytesKey`; strict
   base64; 32 bytes; entropy floor (all printable ASCII, or < 16 distinct values → reject);
@@ -194,7 +195,7 @@ Every milestone opens with the same first task, and its code is written test-fir
 
 ### M4 — Freeze the format 🔒
 
-- [ ] Spec in `docs/dev/specs/` and plan(s) in `docs/dev/plans/`, written with superpowers and
+- [ ] Spec and plan(s) in `docs/dev/superpowers/` (git-ignored, ADR-0039), written with superpowers and
   approved before any other task.
 - [ ] Gate: `file-format.md` review feedback triaged; no open issue touching bytes.
 - [ ] `tests/vectors/generate.py`, run by hand: every positive case in all three custody modes
@@ -207,7 +208,7 @@ Every milestone opens with the same first task, and its code is written test-fir
 
 ### M5 — `rotate.py`
 
-- [ ] Spec in `docs/dev/specs/` and plan(s) in `docs/dev/plans/`, written with superpowers and
+- [ ] Spec and plan(s) in `docs/dev/superpowers/` (git-ignored, ADR-0039), written with superpowers and
   approved before any other task.
 - [ ] `vault.rotate(path)`: leftover-journal recovery first; DEK recovered and commitment checked
   before writing; journal written and synced (with its directory on POSIX); one write of the
@@ -220,7 +221,7 @@ Every milestone opens with the same first task, and its code is written test-fir
 
 ### M6 — CLI
 
-- [ ] Spec in `docs/dev/specs/` and plan(s) in `docs/dev/plans/`, written with superpowers and
+- [ ] Spec and plan(s) in `docs/dev/superpowers/` (git-ignored, ADR-0039), written with superpowers and
   approved before any other task.
 - [ ] `keygen` (TTY unless `--force`), `seal`, `unseal`, `inspect`, `rotate` per
   [architecture.md § 12](../architecture.md#12-the-cli).
@@ -239,7 +240,7 @@ See [v2-django.md](v2-django.md).
 
 ### M8 — Documentation and public review
 
-- [ ] Spec in `docs/dev/specs/` and plan(s) in `docs/dev/plans/`, written with superpowers and
+- [ ] Spec and plan(s) in `docs/dev/superpowers/` (git-ignored, ADR-0039), written with superpowers and
   approved before any other task.
 - [ ] Root README: threat-model paragraph first, install, the sixty-second example, pitfalls,
   and "reviewed, not audited" in those words.
@@ -253,7 +254,7 @@ See [v2-django.md](v2-django.md).
 
 ### M9 — 1.0
 
-- [ ] Spec in `docs/dev/specs/` and plan(s) in `docs/dev/plans/`, written with superpowers and
+- [ ] Spec and plan(s) in `docs/dev/superpowers/` (git-ignored, ADR-0039), written with superpowers and
   approved before any other task.
 - [ ] Every gate green on every matrix cell, slow invariants included.
 - [ ] The frozen vectors pass against the built wheel and the published one.

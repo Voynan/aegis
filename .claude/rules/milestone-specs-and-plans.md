@@ -17,13 +17,14 @@ is available.
 1. **Spec — `superpowers:brainstorming`.**
    - Start from the milestone's tasks in the checklist and its definition of done in
      [docs/roadmap.md](../../docs/roadmap.md). Ask only what `docs/` does not already answer.
-   - Write the spec as a delta over `docs/`, to `docs/dev/specs/YYYY-MM-DD-mN-<topic>-design.md`.
+   - Write the spec as a delta over `docs/`, to
+     `docs/dev/superpowers/specs/YYYY-MM-DD-mN-<topic>-design.md`.
    - A new or changed decision becomes an ADR in [docs/decisions.md](../../docs/decisions.md) and an
      edit to every document it affects. The normative documents win over the spec.
    - **Gate:** the author approves the written spec.
 2. **Plans — `superpowers:writing-plans`.**
    - Write one plan per slice that can be built, tested and reviewed on its own, to
-     `docs/dev/plans/YYYY-MM-DD-mN-<k>-<topic>.md`.
+     `docs/dev/superpowers/plans/YYYY-MM-DD-mN-<k>-<topic>.md`.
    - A small milestone gets one plan. It gets several when it spans modules reviewed separately or
      carries more than about ten tasks. Work on a crypto module (`stream.py`, `envelope.py`,
      `format.py`) always gets a plan of its own, because its pull request answers the review
@@ -46,6 +47,8 @@ is available.
 
 - No automatic commits, branches or worktrees. Skip those steps of the superpowers skills; propose
   atomic commits with the project's `git-commit` skill and wait for the author to authorize them.
-- Specs and plans are committed with the work they describe. Like everything in `docs/dev/`, they
-  are not normative.
+- Specs and plans live in `docs/dev/superpowers/`, which is git-ignored
+  ([ADR-0039](../../docs/decisions.md#adr-0039-milestone-specs-and-plans-are-local-working-files)).
+  They are not normative. Every decision a spec makes that outlives the milestone lands in an ADR
+  or a document; closing a milestone checks that it did.
 - Subagents only when the author asks for them.

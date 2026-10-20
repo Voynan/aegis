@@ -70,8 +70,9 @@ else exists before it is needed.
 │   └── dev/                       # plans and working notes; not normative
 │       ├── v1-todo.md             # the working checklist for 1.0
 │       ├── v2-django.md           # the plan for the Django adapter, after 1.0
-│       ├── specs/                 # one approved spec per milestone (from M0)
-│       ├── plans/                 # one or more approved plans per milestone (from M0)
+│       ├── superpowers/           # milestone specs and plans (from M0); git-ignored
+│       │   ├── specs/             # one approved spec per milestone
+│       │   └── plans/             # one or more approved plans per milestone
 │       ├── notes.md               # personal notes; git-ignored
 │       └── diary/                 # personal diary, one file per day; git-ignored
 ├── .github/
@@ -128,8 +129,8 @@ tracked tree, which is how `tests/vectors/` reaches downstream packagers
 | A design document | `docs/<topic>.md` | the reading order in docs/README.md |
 | A decision | a new ADR in `docs/decisions.md`, never a new file | the ADR table |
 | A plan or a checklist | `docs/dev/<name>.md` — committed, not normative | the plans table in docs/README.md |
-| A milestone spec | `docs/dev/specs/YYYY-MM-DD-mN-<topic>-design.md` | the milestone in docs/dev/v1-todo.md |
-| A milestone plan | `docs/dev/plans/YYYY-MM-DD-mN-<k>-<topic>.md` | the milestone in docs/dev/v1-todo.md |
+| A milestone spec | `docs/dev/superpowers/specs/YYYY-MM-DD-mN-<topic>-design.md` — git-ignored | the milestone in docs/dev/v1-todo.md |
+| A milestone plan | `docs/dev/superpowers/plans/YYYY-MM-DD-mN-<k>-<topic>.md` — git-ignored | the milestone in docs/dev/v1-todo.md |
 | A rule for every session | `.claude/rules/<topic>.md` | contributing.md, if people follow it too |
 | Personal notes | `docs/dev/notes.md`, or `docs/dev/diary/DD-MM-YYYY.md` through the `diary` skill — git-ignored | — |
 
@@ -155,7 +156,8 @@ Generated locally or in CI, and listed in `.gitignore`:
 | `.benchmarks/` | `pytest-benchmark` |
 | `mutants/` | `mutmut` |
 | `.hypothesis/` | Hypothesis — failures are pinned as `@example(...)` instead ([ADR-0037](decisions.md#adr-0037-smaller-resolutions), Q17) |
-| `docs/dev/notes.md`, `docs/dev/diary/` | personal notes — the plans beside them in `docs/dev/` are committed |
+| `docs/dev/notes.md`, `docs/dev/diary/` | personal notes — `v1-todo.md` and `v2-django.md` beside them are committed |
+| `docs/dev/superpowers/` | the milestone specs and plans, written with superpowers ([ADR-0039](decisions.md#adr-0039-milestone-specs-and-plans-are-local-working-files)) |
 
 The committed `.gitignore` is still a Ruby template, with the two `docs/dev/` entries at its
 top. Replacing the template with this list is an M0 task

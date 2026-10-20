@@ -52,6 +52,7 @@ open question of [architecture.md § 16](architecture.md#16-open-questions).
 | [0036](#adr-0036-inspect-and-the-cli-contract) | `inspect` and the CLI contract | accepted |
 | [0037](#adr-0037-smaller-resolutions) | Smaller resolutions | accepted |
 | [0038](#adr-0038-one-maintainer-crypto-review-is-written-not-enforced-at-merge) | One maintainer: crypto review is written, not enforced at merge | accepted |
+| [0039](#adr-0039-milestone-specs-and-plans-are-local-working-files) | Milestone specs and plans are local working files | accepted |
 
 ---
 
@@ -1131,6 +1132,39 @@ has done their read.
   broken on every crypto pull request.
 - *Give write access to a reviewer who does not review.* This would satisfy the check without
   doing the review.
+
+## ADR-0039: Milestone specs and plans are local working files
+
+**Status:** accepted (2026-10-19) — reverses the "committed" part of the workflow rules of
+2026-10-18
+
+**Context.** The workflow rules of 2026-10-18 had each milestone's spec go to `docs/dev/specs/`
+and its plans to `docs/dev/plans/`, committed with the work they describe. The first spec and
+plan, for M0, showed what they are in practice. They are working scaffolding for the
+superpowers skills: step-by-step commands, pinned SHAs, checklists ticked during execution,
+drafts revised in conversation. They are not documentation a contributor or user reads.
+
+**Decision.** Specs go to `docs/dev/superpowers/specs/YYYY-MM-DD-mN-<topic>-design.md` and plans
+to `docs/dev/superpowers/plans/YYYY-MM-DD-mN-<k>-<topic>.md`. `docs/dev/superpowers/` is
+git-ignored, like `docs/dev/notes.md` and `docs/dev/diary/`. The gates do not change: a spec and
+its plans are still written with superpowers and approved by the author before any code.
+
+**Why.** Everything a spec decides that outlives its milestone already has to reach the
+normative documents. A new or changed decision becomes an ADR, and every affected document is
+edited in the same change. Committing the spec as well would keep a second, non-normative copy
+of those decisions that drifts from the documents. The plans' value ends when their milestone
+closes.
+
+**Consequences.**
+- The repository's history shows the decisions (ADRs, document edits) and the evidence (the
+  failing and passing outputs quoted in each pull request), not the working drafts.
+- A spec decision that never reaches an ADR or a document is lost when the local files are.
+  Closing a milestone therefore includes checking that every decision of its spec has landed.
+- No committed document links to a spec or a plan.
+
+**Rejected.** *Commit them in `docs/dev/specs/` and `docs/dev/plans/`* (the previous rule):
+non-normative duplicates of the documents. *Keep them outside the repository:* the superpowers
+skills and the rules expect a stable path inside it.
 
 ---
 

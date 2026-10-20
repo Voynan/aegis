@@ -35,9 +35,10 @@ document above disagree, the document wins and the plan gets fixed.
 | [dev/v1-todo.md](dev/v1-todo.md) | The working checklist for shipping 1.0, milestone by milestone |
 | [dev/v2-django.md](dev/v2-django.md) | The plan for the Django adapter, after 1.0 |
 
-Each milestone's approved spec goes to `dev/specs/` and its plans to `dev/plans/`, written with
-the superpowers skills before any code ([../.claude/rules/](../.claude/rules/)). `dev/notes.md`
-and `dev/diary/` are personal notes and stay out of git.
+Each milestone's approved spec and plans are written with the superpowers skills before any
+code ([../.claude/rules/](../.claude/rules/)), in `dev/superpowers/`. They are local working
+files and stay out of git, like the personal `dev/notes.md` and `dev/diary/`
+([ADR-0039](decisions.md#adr-0039-milestone-specs-and-plans-are-local-working-files)).
 
 ## Status
 
