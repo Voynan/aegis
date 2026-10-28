@@ -375,8 +375,8 @@ floor job is the one exception: it installs the published floors without the loc
 | Workflow | Trigger | Runs |
 |---|---|---|
 | `ci.yml` | every PR and push to `main` | `ruff check --output-format=github`, `ruff format --check`, `mypy`, `zizmor`, the full suite on the matrix, the floor job (`uv pip install --resolution lowest-direct`, [ADR-0040](decisions.md#adr-0040-the-floor-job-installs-the-published-floors-not-the-lock)), per-file coverage gates, a guard that fails if `tests/vectors/` changed |
-| `nightly.yml` | daily | high-`max_examples` Hypothesis, `mutmut`, `pip-audit` on the locked tree (a vulnerability appears without a code change) |
-| `bench.yml` | weekly, release tags, manual | the benchmark suite on the reference runners ([performance.md § 5](performance.md#5-how-it-is-measured)) |
+| `nightly.yml` | daily, manual | high-`max_examples` Hypothesis, `mutmut` (from M2), `pip-audit` on the locked tree (a vulnerability appears without a code change) |
+| `bench.yml` | weekly, release tags, manual | the benchmark suite on the reference runners ([performance.md § 5](performance.md#5-how-it-is-measured)); it logs "no benchmarks yet" and skips until `benchmarks/` holds a file |
 | `release.yml` | `v*` tag | tag check (annotated, signature verified by GitHub, equal to `v` + the `pyproject.toml` version) and `pip-audit` over the whole lock → `uv build`, and a check that the wheel holds only `aegis/` and its metadata → frozen vectors against the built wheel (from M4) → publish through trusted publishing, with attestations, behind the `pypi` environment's reviewer |
 
 - Matrix: [tests.md § 9](tests.md#9-ci).

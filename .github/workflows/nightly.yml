@@ -1,0 +1,57 @@
+# Daily: what a pull request cannot catch (docs/stack.md § 7, docs/tests.md § 9).
+# A Hypothesis run at 10 000 examples, and pip-audit, because a vulnerability can be
+# published without any change here. The mutmut job arrives with M2.
+
+name: Nightly
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly # a manual run queues behind the scheduled one
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  hypothesis:
+    name: Hypothesis, nightly profile
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      HYPOTHESIS_PROFILE: nightly
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.2"
+      - run: uv sync --locked --all-extras
+      - run: uv run pytest
+
+  audit:
+    name: Audit the locked dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.2"
+      - name: Export the whole lock, with hashes
+        run: |
+          uv export --frozen --all-extras --all-groups --no-emit-project \
+            --format requirements-txt -o "$RUNNER_TEMP/locked.txt"
+          test -s "$RUNNER_TEMP/locked.txt"
+      - name: pip-audit
+        run: uv run --frozen pip-audit --strict --disable-pip --require-hashes -r "$RUNNER_TEMP/locked.txt"
