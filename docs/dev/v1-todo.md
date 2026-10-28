@@ -23,16 +23,16 @@ git-ignored.
   diagrams, this checklist, and the spec-and-plan workflow in the documents.
 - [ ] 👤 **Q19 — request public review of `file-format.md` now** (cryptography mailing lists,
       `r/crypto`, the `age`/Tink communities), before any code depends on it.
-- [ ] 👤 **Q18 — reserve `aegis-voynan`:** pending trusted publisher registered with `release.yml` / `pypi` (2026-10-19);
-      the `0.0.0` placeholder waits for `release.yml` and the `pypi` environment, both in M0.
-- [ ] Start M0 with its spec and plan — `superpowers:brainstorming`, then
-      `superpowers:writing-plans` — and nothing else first. Nothing else blocks it.
+- [x] 👤 **Q18 — reserve `aegis-voynan`:** `0.0.0` published by `release.yml` from the signed
+      tag `v0.0.0`, with attestations — 2026-10-26 (run 40366801472).
+- [x] Start M0 with its spec and plan — spec and plan M0-1 approved, 2026-10-19.
+- [ ] Execute plan M0-3 (CI and repository); M0-2 (tooling) done 2026-10-26.
 
 ## 2. Status
 
 | Milestone | State | Blocked by |
 |---|---|---|
-| M0 — Scaffolding | not started | — |
+| M0 — Scaffolding | in progress — M0-1 and M0-2 done 2026-10-26; M0-3 under way | — |
 | M1 — `errors`, `format`, `context` | not started | M0 |
 | M2 — `envelope`, `stream` | not started | M1; the Q19 review request should be out |
 | M3 — `keys`, `vault`, `readers`, `info` | not started | M2 |
@@ -80,43 +80,43 @@ Every milestone opens with the same first task, and its code is written test-fir
 
 **Repository**
 
-- [ ] Replace `.gitignore` (still the Ruby template) with the list in
+- [x] Replace `.gitignore` (still the Ruby template) with the list in
   [structure.md § 5](../structure.md#5-never-committed), `.hypothesis/` included. **Keep
   `docs/dev/notes.md` and `docs/dev/diary/`** — and only those: the plans in `docs/dev/` stay
   committed.
 - [ ] Create the paths [structure.md § 2](../structure.md#2-the-tree) marks M0.
-- [ ] `README.md` skeleton: title, the threat-model paragraph first, pre-1.0 status,
+- [x] `README.md` skeleton: title, the threat-model paragraph first, pre-1.0 status,
   `pip install aegis-voynan`.
-- [ ] `SECURITY.md` at the root, pointing at [security.md § 8](../security.md#8-reporting-a-vulnerability).
-- [ ] Turn on **private vulnerability reporting** in the repository settings.
+- [x] `SECURITY.md` at the root, pointing at [security.md § 8](../security.md#8-reporting-a-vulnerability).
+- [x] Turn on **private vulnerability reporting** in the repository settings.
 - [ ] Ruleset on `main`: required status checks, linear history, no force pushes.
 - [ ] `CODEOWNERS` for `src/aegis/stream.py`, `envelope.py`, `format.py`, `keys.py`,
   `readers.py`, `rotate.py`, `docs/file-format.md` and `tests/vectors/`. No required approvals
   while there is one maintainer (ADR-0038).
-- [ ] Protect `v*` tags and register the maintainers' signing keys.
+- [x] Protect `v*` tags and register the maintainers' signing keys.
 - [ ] Dependabot for `uv` and `github-actions`.
 
 **Packaging**
 
-- [ ] `pyproject.toml` from [stack.md § 5](../stack.md#5-packaging): `requires-python = ">=3.11"`,
+- [x] `pyproject.toml` from [stack.md § 5](../stack.md#5-packaging): `requires-python = ">=3.11"`,
   the `[cli]` extra only, the `dev` group.
-- [ ] `src/aegis/__init__.py` with a lazy `__version__`, and `src/aegis/py.typed`.
-- [ ] Tool configuration from [stack.md § 6.3](../stack.md#63-tool-configuration): `TID251` bans
+- [x] `src/aegis/__init__.py` with a lazy `__version__`, and `src/aegis/py.typed`.
+- [x] Tool configuration from [stack.md § 6.3](../stack.md#63-tool-configuration): `TID251` bans
   `os.urandom`, `os.environ`, `os.getenv` and `click`, with per-file ignores for `keys.py`,
   `vault.py` and `cli/` only. A per-file ignore lifts the whole rule, so the AST purity test
   (tests.md § 6) is what narrows `os.urandom` to `vault.py` and the environment to `keys.py`.
-- [ ] `tools/coverage_gates.py`: 100 for `stream.py`, `envelope.py`, `format.py`; 95 for
+- [x] `tools/coverage_gates.py`: 100 for `stream.py`, `envelope.py`, `format.py`; 95 for
   `context.py`, `keys.py`, `readers.py`, `rotate.py`; 90 for the rest.
-- [ ] `.pre-commit-config.yaml` with `repo: local` hooks (`uv run ruff check`,
+- [x] `.pre-commit-config.yaml` with `repo: local` hooks (`uv run ruff check`,
   `uv run ruff format`, `uv lock --check`).
-- [ ] `uv lock`, and commit `uv.lock`.
+- [x] `uv lock`, and commit `uv.lock`.
 
 **PyPI** 👤
 
 - [x] Pending trusted publisher for `aegis-voynan`: repository `Voynan/aegis`, workflow
   `release.yml`, environment `pypi` — 2026-10-19.
-- [ ] The `pypi` environment in the repository settings, with a required reviewer.
-- [ ] Publish the `0.0.0` placeholder through it (Q18).
+- [x] The `pypi` environment in the repository settings, with a required reviewer.
+- [x] Publish the `0.0.0` placeholder through it (Q18) — 2026-10-26.
 
 **CI** — [stack.md § 7](../stack.md#7-cicd)
 
@@ -126,14 +126,14 @@ Every milestone opens with the same first task, and its code is written test-fir
 - [ ] `nightly.yml`: the Hypothesis `nightly` profile; `pip-audit` over the locked tree;
   `mutmut` once M2 lands.
 - [ ] `bench.yml`: weekly, on tags, manual; empty suite for now.
-- [ ] `release.yml`: signed `v*` tag → `pip-audit` → `uv build` → frozen vectors against the
+- [x] `release.yml`: signed `v*` tag → `pip-audit` → `uv build` → frozen vectors against the
   built wheel → `pypa/gh-action-pypi-publish` over OIDC, with attestations.
 
 **DoD**
 
 - [ ] A green CI run on an empty package on every matrix cell, including `lowest-direct`.
 - [ ] `uv sync --all-extras` works on Linux, macOS and Windows.
-- [ ] The placeholder release exists on PyPI.
+- [x] The placeholder release exists on PyPI.
 
 ### M1 — The pure core: `errors`, `format`, `context`
 
@@ -203,7 +203,7 @@ Every milestone opens with the same first task, and its code is written test-fir
   (with derived values), every negative vector of [tests.md § 3](../tests.md#3-layer-1--frozen-vectors-kat),
   the deliberately non-canonical case.
 - [ ] Hand-check offset by offset with a second person; record both names in the PR.
-- [ ] KAT both directions; activate the `tests/vectors/` change guard.
+- [ ] KAT both directions; confirm the `tests/vectors/` guard rejects a modified vector.
 - [ ] DoD: the vector file is committed with its "FROZEN" note; CI runs it on every matrix cell;
   no code path anywhere in the repository rewrites it.
 
