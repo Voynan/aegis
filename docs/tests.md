@@ -352,7 +352,7 @@ test.
 |---|---|
 | Python | 3.11, 3.12, 3.13, 3.14 ([ADR-0023](decisions.md#adr-0023-python-floor-follows-cpythons-support-window)) |
 | OS | Linux, macOS, Windows (Windows matters: `os.replace`, `fsync`, no `pwrite`, line endings) |
-| `cryptography` | oldest supported (`uv sync --resolution lowest-direct`) + newest (`uv.lock`) |
+| `cryptography` | oldest supported (`uv pip install --resolution lowest-direct`, [ADR-0040](decisions.md#adr-0040-the-floor-job-installs-the-published-floors-not-the-lock)) + newest (`uv.lock`) |
 
 Every PR runs: `ruff`, `mypy --strict`, `zizmor`, the full suite, the coverage gates. The
 nightly job adds a high-`max_examples` Hypothesis run and mutation testing.

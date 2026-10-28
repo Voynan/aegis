@@ -38,10 +38,10 @@ Security = "https://github.com/Voynan/aegis/security/policy"
 # `aegis` command.
 
 [dependency-groups]                  # not published: exact versions live in uv.lock
+test = ["pytest>=9.1.1", "hypothesis>=6.168.0", "mypy>=2.3.1"]   # what the suite runs (ADR-0040)
 dev = [
-  "ruff>=0.16.7", "mypy>=2.3.1",
-  "pytest>=9.1.1", "pytest-cov>=7.1.0", "hypothesis>=6.168.0",
-  "pytest-benchmark>=5.3.0",
+  { include-group = "test" },
+  "ruff>=0.16.7", "pytest-cov>=7.1.0", "pytest-benchmark>=5.3.0",
   "mutmut>=3.8.0", "pre-commit>=4.6.2",
   "pip-audit>=2.9", "zizmor>=1.0",
 ]

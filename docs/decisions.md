@@ -37,7 +37,7 @@ open question of [architecture.md § 16](architecture.md#16-open-questions).
 | [0021](#adr-0021-the-cli-is-built-on-click) | The CLI is built on `click` | accepted |
 | [0022](#adr-0022-hatchling-as-the-build-backend) | Hatchling as the build backend | accepted |
 | [0023](#adr-0023-python-floor-follows-cpythons-support-window) | Python floor follows CPython's support window | accepted |
-| [0024](#adr-0024-uv-for-development-and-ci) | `uv` for development and CI | accepted |
+| [0024](#adr-0024-uv-for-development-and-ci) | `uv` for development and CI | accepted — floor job amended by 0040 |
 | [0025](#adr-0025-the-package-lives-in-src) | The package lives in `src/` | accepted |
 | [0026](#adr-0026-the-library-draws-every-data-key-key-sources-only-wrap-and-unwrap) | The library draws every data key; key sources only wrap and unwrap | accepted |
 | [0027](#adr-0027-a-per-file-salt-drives-the-key-schedule-and-the-header-commits-to-the-key) | A per-file salt drives the key schedule, and the header commits to the key | accepted |
@@ -53,6 +53,7 @@ open question of [architecture.md § 16](architecture.md#16-open-questions).
 | [0037](#adr-0037-smaller-resolutions) | Smaller resolutions | accepted |
 | [0038](#adr-0038-one-maintainer-crypto-review-is-written-not-enforced-at-merge) | One maintainer: crypto review is written, not enforced at merge | accepted |
 | [0039](#adr-0039-milestone-specs-and-plans-are-local-working-files) | Milestone specs and plans are local working files | accepted |
+| [0040](#adr-0040-the-floor-job-installs-the-published-floors-not-the-lock) | The floor job installs the published floors, not the lock | accepted |
 
 ---
 
@@ -501,7 +502,7 @@ architecture.md § 14 and tests.md § 9 move to 3.11–3.14.
 
 ## ADR-0024: `uv` for development and CI
 
-**Status:** accepted (2026-09-14)
+**Status:** accepted (2026-09-14) — floor job amended by [ADR-0040](#adr-0040-the-floor-job-installs-the-published-floors-not-the-lock)
 
 **Context.** The documents described `venv` + `pip` for contributors, development tools
 pinned with `==` inside a `[dev]` extra, and a CI job for the oldest supported
@@ -1165,6 +1166,45 @@ closes.
 **Rejected.** *Commit them in `docs/dev/specs/` and `docs/dev/plans/`* (the previous rule):
 non-normative duplicates of the documents. *Keep them outside the repository:* the superpowers
 skills and the rules expect a stable path inside it.
+
+## ADR-0040: The floor job installs the published floors, not the lock
+
+**Status:** accepted (2026-10-26) — amends the floor-job line of
+[ADR-0024](#adr-0024-uv-for-development-and-ci)
+
+**Context.** ADR-0024 made the dependency-floor job `uv sync --resolution lowest-direct`. `uv`
+resolves one lock for the project and every dependency group together, so a requirement of a
+development tool constrains the runtime dependencies inside it. While M0's CI was being built
+(2026-10-26), `mutmut 3.8.0` was found to require `click>=8.4.2`. `uv sync --resolution
+lowest-direct` therefore installed `click 8.4.2`, while the published metadata promises
+`click>=8.1`. The job would have tested a floor that users are not given, and passed.
+
+**Decision.**
+- A `test` dependency group holds only what the suite itself runs: `pytest`, `hypothesis` and
+  `mypy`. The `dev` group includes it (`{ include-group = "test" }`), so `uv sync` is unchanged.
+- The floor job runs `uv venv`, then
+  `uv pip install --resolution lowest-direct -e ".[cli]" --group test`, and prints the
+  `cryptography` and `click` versions it got before running the suite. `uv pip install`
+  resolves only the requirements it is given, as a user's `pip install "aegis-voynan[cli]"`
+  does, with the lock out of the picture.
+- Every other CI job still runs `uv sync --locked`.
+
+**Why.** Verified in a scratch copy on 2026-10-26: `uv sync --resolution lowest-direct` gave
+`cryptography 44.0.0` and `click 8.4.2`. The `uv pip` form gave `cryptography 44.0.0`,
+`click 8.1.0`, `pytest 9.1.1`, `hypothesis 6.168.0` and `mypy 2.3.1`, and passed. A floor
+test whose result depends on which linters we happen to use is not a floor test.
+
+**Consequences.**
+- The test tools also run at their declared floors in that job. A floor that breaks the suite
+  is raised in `pyproject.toml`, like any other.
+- A new tool the suite needs at run time joins `test`, not just `dev`. Otherwise the floor job
+  fails, and that failure is what reminds us.
+
+**Rejected.** *Keep `uv sync --resolution lowest-direct`:* it measures the lock, not the
+metadata. *Raise the `click` floor to 8.4.2:* it would impose a linter's requirement on users.
+*`[tool.uv] conflicts` between the CLI extra and `mutmut`:* it forks the lock to work around a
+problem that `uv pip` does not have. *Hard-code the floors in the workflow:* they would drift
+from `pyproject.toml`.
 
 ---
 

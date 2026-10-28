@@ -82,7 +82,8 @@ later floor raise, not a 1.0 requirement; the code uses one path, the one the fl
   is a courtesy to applications that pin, not a support branch. 44.0 ships `abi3` wheels
   that install on every Python in the matrix.
 - **Both ends are tested.** CI runs the locked (latest) resolution and a
-  `uv sync --resolution lowest-direct` job that installs exactly the floors
+  floor job that installs exactly the published floors with `uv pip install --resolution
+  lowest-direct` ([ADR-0040](decisions.md#adr-0040-the-floor-job-installs-the-published-floors-not-the-lock))
   ([tests.md § 9](tests.md#9-ci)). A floor that is not tested is a guess.
 - **Raised** in a minor Aegis release when `cryptography` fixes something that touches
   AES-GCM, HKDF or its bundled OpenSSL.
@@ -170,10 +171,10 @@ dependencies = ["cryptography>=44.0"]
 cli = ["click>=8.1"]                 # [django] arrives with the V2 adapter (ADR-0034)
 
 [dependency-groups]                  # not published: exact versions live in uv.lock
+test = ["pytest>=9.1.1", "hypothesis>=6.168.0", "mypy>=2.3.1"]   # what the suite runs (ADR-0040)
 dev = [
-  "ruff>=0.16.7", "mypy>=2.3.1",
-  "pytest>=9.1.1", "pytest-cov>=7.1.0", "hypothesis>=6.168.0",
-  "pytest-benchmark>=5.3.0",
+  { include-group = "test" },
+  "ruff>=0.16.7", "pytest-cov>=7.1.0", "pytest-benchmark>=5.3.0",
   "mutmut>=3.8.0", "pre-commit>=4.6.2",
   "pip-audit>=2.9", "zizmor>=1.0",
 ]
@@ -205,7 +206,7 @@ in the same file: § 6.3.
 | Create the environment with every extra and the `dev` group | `uv sync --all-extras` |
 | Run anything in it | `uv run pytest`, `uv run mypy` |
 | Test another Python | `uv sync --all-extras --python 3.13` |
-| Test the dependency floors | `uv sync --all-extras --resolution lowest-direct` |
+| Test the dependency floors | `uv venv && uv pip install --resolution lowest-direct -e ".[cli]" --group test` ([ADR-0040](decisions.md#adr-0040-the-floor-job-installs-the-published-floors-not-the-lock)) |
 | Update one tool | `uv lock --upgrade-package ruff` |
 | Build the wheel and sdist | `uv build` |
 
@@ -217,7 +218,7 @@ in the same file: § 6.3.
 | Dev tools: exact versions in `uv.lock` instead of `==` pins | The runtime policy: floors, no ceilings |
 | `[dev]` extra → `dev` dependency group | The build backend (Hatchling) |
 | CI installs Python with `uv python install` | The publishing path (trusted publishing, attestations) |
-| The floor job becomes `--resolution lowest-direct` | The test matrix itself |
+| The floor job becomes `--resolution lowest-direct`, through `uv pip` ([ADR-0040](decisions.md#adr-0040-the-floor-job-installs-the-published-floors-not-the-lock)) | The test matrix itself |
 
 **`pip` still works** for contributors who prefer it. pip 25.1+ reads dependency groups:
 `pip install -e ".[cli]" --group dev`. Without the lockfile you get the latest
@@ -367,12 +368,13 @@ files combine.
 
 ## 7. CI/CD
 
-GitHub Actions, four workflows. Every job starts with `astral-sh/setup-uv` pinned to the
-locked `uv` version, then `uv sync --locked`, which fails if `uv.lock` is stale.
+GitHub Actions, four workflows. Every job that runs Python starts with `astral-sh/setup-uv`
+pinned to one `uv` version, then `uv sync --locked`, which fails if `uv.lock` is stale. The
+floor job is the one exception: it installs the published floors without the lock ([ADR-0040](decisions.md#adr-0040-the-floor-job-installs-the-published-floors-not-the-lock)).
 
 | Workflow | Trigger | Runs |
 |---|---|---|
-| `ci.yml` | every PR and push to `main` | `ruff check --output-format=github`, `ruff format --check`, `mypy`, `zizmor`, the full suite on the matrix, the floor job (`--resolution lowest-direct`), per-file coverage gates, a guard that fails if `tests/vectors/` changed |
+| `ci.yml` | every PR and push to `main` | `ruff check --output-format=github`, `ruff format --check`, `mypy`, `zizmor`, the full suite on the matrix, the floor job (`uv pip install --resolution lowest-direct`, [ADR-0040](decisions.md#adr-0040-the-floor-job-installs-the-published-floors-not-the-lock)), per-file coverage gates, a guard that fails if `tests/vectors/` changed |
 | `nightly.yml` | daily | high-`max_examples` Hypothesis, `mutmut`, `pip-audit` on the locked tree (a vulnerability appears without a code change) |
 | `bench.yml` | weekly, release tags, manual | the benchmark suite on the reference runners ([performance.md § 5](performance.md#5-how-it-is-measured)) |
 | `release.yml` | `v*` tag | tag check (annotated, signature verified by GitHub, equal to `v` + the `pyproject.toml` version) and `pip-audit` over the whole lock → `uv build`, and a check that the wheel holds only `aegis/` and its metadata → frozen vectors against the built wheel (from M4) → publish through trusted publishing, with attestations, behind the `pypi` environment's reviewer |
