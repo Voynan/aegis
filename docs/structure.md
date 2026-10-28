@@ -111,7 +111,7 @@ else exists before it is needed.
 | `CHANGELOG.md` | [contributing.md § 9](contributing.md#9-releasing) | no |
 
 The wheel is built from `packages = ["src/aegis"]` and installs as `aegis`. The sdist is an
-allowlist — `src/`, `tests/`, `docs/`, `LICENSE`, `README.md`, `SECURITY.md`, `pyproject.toml`,
+allowlist — `src/`, `tests/`, `tools/`, `docs/`, `LICENSE`, `README.md`, `SECURITY.md`, `pyproject.toml`,
 and `CHANGELOG.md` from M9 — which is how `tests/vectors/` reaches downstream packagers, and why a
 local build never ships an untracked file ([stack.md § 5](stack.md#5-packaging)).
 

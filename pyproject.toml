@@ -50,7 +50,7 @@ dev = [
 packages = ["src/aegis"]             # installed as `aegis` (ADR-0025)
 
 [tool.hatch.build.targets.sdist]     # an allowlist: a local build never ships untracked files
-only-include = ["src", "tests", "docs", "LICENSE", "README.md", "SECURITY.md", "pyproject.toml"]
+only-include = ["src", "tests", "tools", "docs", "LICENSE", "README.md", "SECURITY.md", "pyproject.toml"]
 
 [tool.uv]
 required-version = ">=0.12"
@@ -97,6 +97,7 @@ max-complexity = 10
 "src/aegis/vault.py"  = ["TID251"]      # the edges: randomness
 "src/aegis/cli/**"    = ["TID251"]
 "tests/**"            = ["S101", "D", "TID251"]
+"tools/**"            = ["T20"]         # scripts print their verdicts
 
 [tool.mypy]
 files = ["src/aegis"]

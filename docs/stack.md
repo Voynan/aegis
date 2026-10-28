@@ -141,9 +141,10 @@ latest release on the newest ([dev/v2-django.md](dev/v2-django.md)).
   part of the published metadata: `pip install "aegis-voynan[dev]"` would install our
   linters into a user's environment. A group never leaves the repository.
 - **Wheel** `py3-none-any`. **sdist** includes `tests/vectors/`, so downstream packagers can
-  run the frozen vectors. Its contents are an allowlist (`only-include`), not "whatever is not
-  ignored": Hatchling reads only the root `.gitignore` and includes untracked files, so a
-  local build could otherwise ship a stray file.
+  run the frozen vectors, and `tools/`, which the unit tests load. Its contents are an
+  allowlist (`only-include`), not "whatever is not ignored": Hatchling reads only the root
+  `.gitignore` and includes untracked files, so a local build could otherwise ship a stray
+  file.
 - **`uv.lock` is committed.** It governs development and CI only; it is not published and
   does not constrain users.
 
@@ -186,7 +187,7 @@ aegis = "aegis.cli.__main__:main"
 packages = ["src/aegis"]             # installed as `aegis` (ADR-0025)
 
 [tool.hatch.build.targets.sdist]     # an allowlist: a local build never ships untracked files
-only-include = ["src", "tests", "docs", "LICENSE", "README.md", "SECURITY.md", "pyproject.toml"]
+only-include = ["src", "tests", "tools", "docs", "LICENSE", "README.md", "SECURITY.md", "pyproject.toml"]
 
 [tool.uv]
 required-version = ">=0.12"
@@ -296,6 +297,7 @@ max-complexity = 10
 "src/aegis/vault.py"  = ["TID251"]      # the edges: randomness
 "src/aegis/cli/**"    = ["TID251"]
 "tests/**"            = ["S101", "D", "TID251"]
+"tools/**"            = ["T20"]         # scripts print their verdicts
 ```
 
 - **Why these rule groups.** Each one either enforces a rule in
