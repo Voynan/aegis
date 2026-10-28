@@ -1,0 +1,18 @@
+# Weekly updates for uv.lock and the SHA-pinned actions (docs/stack.md § 6.2). The cooldown
+# keeps a release out until it has been public for a week; security updates are not delayed.
+# The `uv` version that setup-uv installs is a workflow input, which Dependabot does not move.
+
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7

@@ -1,0 +1,11 @@
+# The crypto paths of docs/contributing.md § 7, and the frozen vectors.
+# No required approvals while there is one maintainer (ADR-0038).
+
+src/aegis/stream.py      @KaioVinicios
+src/aegis/envelope.py    @KaioVinicios
+src/aegis/format.py      @KaioVinicios
+src/aegis/keys.py        @KaioVinicios
+src/aegis/readers.py     @KaioVinicios
+src/aegis/rotate.py      @KaioVinicios
+docs/file-format.md      @KaioVinicios
+/tests/vectors/          @KaioVinicios
