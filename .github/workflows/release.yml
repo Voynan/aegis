@@ -131,7 +131,8 @@ jobs:
           name: dist
           path: dist/
       - if: steps.probe.outputs.present == 'true'
-        run: uv run --isolated --no-project --with dist/*.whl --with pytest pytest tests/vectors
+        # tests/conftest.py loads the Hypothesis profiles, so the run needs hypothesis too.
+        run: uv run --isolated --no-project --with dist/*.whl --with pytest --with hypothesis pytest tests/vectors
 
   publish:
     name: Publish to PyPI
