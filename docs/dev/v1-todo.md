@@ -26,14 +26,15 @@ git-ignored.
 - [x] 👤 **Q18 — reserve `aegis-voynan`:** `0.0.0` published by `release.yml` from the signed
       tag `v0.0.0`, with attestations — 2026-10-26 (run 40366801472).
 - [x] Start M0 with its spec and plan — spec and plan M0-1 approved, 2026-10-19.
-- [ ] Execute plan M0-3 (CI and repository); M0-2 (tooling) done 2026-10-26.
+- [x] M0 closed — 2026-10-28: plans M0-1, M0-2 and M0-3 executed; CI green on every cell
+      ([run 40772185921](https://github.com/Voynan/aegis/actions/runs/40772185921)).
 
 ## 2. Status
 
 | Milestone | State | Blocked by |
 |---|---|---|
-| M0 — Scaffolding | in progress — M0-1 and M0-2 done 2026-10-26; M0-3 under way | — |
-| M1 — `errors`, `format`, `context` | not started | M0 |
+| M0 — Scaffolding | **done** — 2026-10-28 | — |
+| M1 — `errors`, `format`, `context` | not started | — |
 | M2 — `envelope`, `stream` | not started | M1; the Q19 review request should be out |
 | M3 — `keys`, `vault`, `readers`, `info` | not started | M2 |
 | M4 — Freeze 🔒 | not started | M3; format review feedback triaged |
@@ -75,7 +76,7 @@ Every milestone opens with the same first task, and its code is written test-fir
 
 ### M0 — Repository scaffolding
 
-- [ ] Spec and plan(s) in `docs/dev/superpowers/` (git-ignored, ADR-0039), written with superpowers and
+- [x] Spec and plan(s) in `docs/dev/superpowers/` (git-ignored, ADR-0039), written with superpowers and
   approved before any other task.
 
 **Repository**
@@ -84,17 +85,17 @@ Every milestone opens with the same first task, and its code is written test-fir
   [structure.md § 5](../structure.md#5-never-committed), `.hypothesis/` included. **Keep
   `docs/dev/notes.md` and `docs/dev/diary/`** — and only those: the plans in `docs/dev/` stay
   committed.
-- [ ] Create the paths [structure.md § 2](../structure.md#2-the-tree) marks M0.
+- [x] Create the paths [structure.md § 2](../structure.md#2-the-tree) marks M0.
 - [x] `README.md` skeleton: title, the threat-model paragraph first, pre-1.0 status,
   `pip install aegis-voynan`.
 - [x] `SECURITY.md` at the root, pointing at [security.md § 8](../security.md#8-reporting-a-vulnerability).
 - [x] Turn on **private vulnerability reporting** in the repository settings.
-- [ ] Ruleset on `main`: required status checks, linear history, no force pushes.
-- [ ] `CODEOWNERS` for `src/aegis/stream.py`, `envelope.py`, `format.py`, `keys.py`,
+- [x] Ruleset on `main`: required status checks, linear history, no force pushes.
+- [x] `CODEOWNERS` for `src/aegis/stream.py`, `envelope.py`, `format.py`, `keys.py`,
   `readers.py`, `rotate.py`, `docs/file-format.md` and `tests/vectors/`. No required approvals
   while there is one maintainer (ADR-0038).
 - [x] Protect `v*` tags and register the maintainers' signing keys.
-- [ ] Dependabot for `uv` and `github-actions`.
+- [x] Dependabot for `uv` and `github-actions`.
 
 **Packaging**
 
@@ -120,19 +121,19 @@ Every milestone opens with the same first task, and its code is written test-fir
 
 **CI** — [stack.md § 7](../stack.md#7-cicd)
 
-- [ ] `ci.yml`: `setup-uv` pinned by SHA → `uv sync --locked` → ruff → mypy → zizmor → pytest
+- [x] `ci.yml`: `setup-uv` pinned by SHA → `uv sync --locked` → ruff → mypy → zizmor → pytest
   on Python 3.11–3.14 × Linux/macOS/Windows → the `lowest-direct` floor job → coverage gates →
   a guard on changes to `tests/vectors/`.
-- [ ] `nightly.yml`: the Hypothesis `nightly` profile; `pip-audit` over the locked tree;
+- [x] `nightly.yml`: the Hypothesis `nightly` profile; `pip-audit` over the locked tree;
   `mutmut` once M2 lands.
-- [ ] `bench.yml`: weekly, on tags, manual; empty suite for now.
+- [x] `bench.yml`: weekly, on tags, manual; empty suite for now.
 - [x] `release.yml`: signed `v*` tag → `pip-audit` → `uv build` → frozen vectors against the
   built wheel → `pypa/gh-action-pypi-publish` over OIDC, with attestations.
 
 **DoD**
 
-- [ ] A green CI run on an empty package on every matrix cell, including `lowest-direct`.
-- [ ] `uv sync --all-extras` works on Linux, macOS and Windows.
+- [x] A green CI run on an empty package on every matrix cell, including `lowest-direct`.
+- [x] `uv sync --all-extras` works on Linux, macOS and Windows.
 - [x] The placeholder release exists on PyPI.
 
 ### M1 — The pure core: `errors`, `format`, `context`
