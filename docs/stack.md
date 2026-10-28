@@ -380,7 +380,16 @@ floor job is the one exception: it installs the published floors without the loc
 | `release.yml` | `v*` tag | tag check (annotated, signature verified by GitHub, equal to `v` + the `pyproject.toml` version) and `pip-audit` over the whole lock → `uv build`, and a check that the wheel holds only `aegis/` and its metadata → frozen vectors against the built wheel (from M4) → publish through trusted publishing, with attestations, behind the `pypi` environment's reviewer |
 
 - Matrix: [tests.md § 9](tests.md#9-ci).
-- Third-party actions are pinned by **commit SHA**, not by tag.
+- Third-party actions are pinned by **commit SHA**, not by tag. Dependabot moves the SHAs and
+  `uv.lock`, each a week after a release (`cooldown`); security updates are not delayed.
+- The `uv` version is an input of `setup-uv`, which Dependabot does not update. It is the same
+  in every workflow and is bumped by hand, in one PR for all four.
+- `ci-ok` depends on every other `ci.yml` job and fails unless all of them succeeded. It is the
+  only status check the `main` ruleset requires, so the matrix can change without touching
+  the ruleset.
+- The `tests/vectors/` guard fails on any change there except an addition, renames included
+  (`git diff --no-renames --diff-filter=a`). Before M4 the directory is empty; from M4 the
+  frozen files are covered with nothing to switch on.
 - No long-lived PyPI token exists. Publishing goes through `pypa/gh-action-pypi-publish` over
   OIDC, which also produces the PEP 740 attestations. It is kept rather than `uv publish`
   for that reason.
